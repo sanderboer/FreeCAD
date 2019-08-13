@@ -31,16 +31,16 @@ makedepends+=" coin3-devel"
 
 makedepends+=" libshiboken2-devel"
 makedepends+=" python3-shiboken2"
-makedepends+=" libshiboken-python3-devel"
+#makedepends+=" libshiboken-python3-devel"
 
-makedepends+=" libpyside-python"
-makedepends+=" libpyside-python-devel"
+#makedepends+=" libpyside-python"
+#makedepends+=" libpyside-python-devel"
 
 makedepends+=" libpyside-python3"
 makedepends+=" libpyside-python3-devel"
 
 makedepends+=" libspnav-devel"
-makedepends+=" pyside-tools"
+#makedepends+=" pyside-tools"
 makedepends+=" pyside2-tools"
 makedepends+=" liblz4-devel"
 makedepends+=" libpyside2-python3-devel"
