@@ -25,6 +25,7 @@
 #include "PreCompiled.h"
 #ifndef _PreComp_
     #include <QAction>
+    #include <QTimer>
     #include <QApplication>
     #include <QContextMenuEvent>
     #include <QFileDialog>
@@ -83,6 +84,9 @@
 #include <Mod/TechDraw/App/DrawViewImage.h>
 #include <Mod/TechDraw/App/DrawLeaderLine.h>
 #include <Mod/TechDraw/App/DrawRichAnno.h>
+#include <Mod/TechDraw/App/DrawWeldSymbol.h>
+#include <Mod/TechDraw/App/DrawTile.h>
+#include <Mod/TechDraw/App/DrawTileWeld.h>
 
 #include "Rez.h"
 #include "QGIDrawingTemplate.h"
@@ -99,6 +103,8 @@
 #include "QGILeaderLine.h"
 #include "QGIRichAnno.h"
 #include "QGMText.h"
+#include "QGIWeldSymbol.h"
+#include "QGITile.h"
 
 
 using namespace TechDrawGui;
@@ -137,6 +143,10 @@ MDIViewPage::MDIViewPage(ViewProviderPage *pageVp, Gui::Document* doc, QWidget* 
     tabText += QString::fromUtf8("[*]");
     setWindowTitle(tabText);
     setCentralWidget(m_view);            //this makes m_view a Qt child of MDIViewPage
+
+    m_timer = new QTimer(this);
+    m_timer->setSingleShot(true);
+    QObject::connect(m_timer,SIGNAL(timeout()),this,SLOT(onTimer()));
 
     // Connect Signals and Slots
     QObject::connect(
@@ -360,6 +370,9 @@ bool MDIViewPage::attachView(App::DocumentObject *obj)
     } else if (typeId.isDerivedFrom(TechDraw::DrawRichAnno::getClassTypeId()) ) {
         qview = m_view->addRichAnno( static_cast<TechDraw::DrawRichAnno*>(obj) );
 
+    } else if (typeId.isDerivedFrom(TechDraw::DrawWeldSymbol::getClassTypeId()) ) {
+        qview = m_view->addWeldSymbol( static_cast<TechDraw::DrawWeldSymbol*>(obj) );
+
     } else if (typeId.isDerivedFrom(TechDraw::DrawHatch::getClassTypeId()) ) {
         //Hatch is not attached like other Views (since it isn't really a View)
         return true;
@@ -381,6 +394,10 @@ void MDIViewPage::onDeleteObject(const App::DocumentObject& obj)
         // if obj is me, hide myself and my tab
         m_vpPage->hide();
     }
+}
+
+void MDIViewPage::onTimer() {
+    updateDrawing(true);
 }
 
 void MDIViewPage::updateTemplate(bool forceUpdate)
@@ -412,11 +429,21 @@ void MDIViewPage::updateTemplate(bool forceUpdate)
 //this is time consuming. should only be used when there is a problem.
 //should have been called MDIViewPage::fixWidowAndOrphans()
 //void MDIViewPage::updateDrawing(bool forceUpdate)
-void MDIViewPage::updateDrawing(void)
+void MDIViewPage::updateDrawing(bool force)
 {
+    if(!force) {
+        m_timer->start(100);
+        return;
+    }
+    m_timer->stop();
+
     // get all the DrawViews for this page, including the second level ones
     // if we ever have collections of collections, we'll need to revisit this
     DrawPage* thisPage = m_vpPage->getDrawPage();
+
+    if(!thisPage->getNameInDocument())
+        return;
+
     std::vector<App::DocumentObject*> pChildren  = thisPage->getAllViews();
 
     // if dv doesn't have a graphic, make one
@@ -843,7 +870,6 @@ void MDIViewPage::toggleKeepUpdated(void)
 {
     bool state = m_vpPage->getDrawPage()->KeepUpdated.getValue();
     m_vpPage->getDrawPage()->KeepUpdated.setValue(!state);
-    App::GetApplication().signalChangePropertyEditor(m_vpPage->getDrawPage()->KeepUpdated);
 }
 
 void MDIViewPage::viewAll()

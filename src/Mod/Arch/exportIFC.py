@@ -1,25 +1,25 @@
-#***************************************************************************
-#*                                                                         *
-#*   Copyright (c) 2014                                                    *
-#*   Yorik van Havre <yorik@uncreated.net>                                 *
-#*                                                                         *
-#*   This program is free software; you can redistribute it and/or modify  *
-#*   it under the terms of the GNU Lesser General Public License (LGPL)    *
-#*   as published by the Free Software Foundation; either version 2 of     *
-#*   the License, or (at your option) any later version.                   *
-#*   for detail see the LICENCE text file.                                 *
-#*                                                                         *
-#*   This program is distributed in the hope that it will be useful,       *
-#*   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
-#*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
-#*   GNU Library General Public License for more details.                  *
-#*                                                                         *
-#*   You should have received a copy of the GNU Library General Public     *
-#*   License along with this program; if not, write to the Free Software   *
-#*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
-#*   USA                                                                   *
-#*                                                                         *
-#***************************************************************************
+# ***************************************************************************
+# *                                                                         *
+# *   Copyright (c) 2014                                                    *
+# *   Yorik van Havre <yorik@uncreated.net>                                 *
+# *                                                                         *
+# *   This program is free software; you can redistribute it and/or modify  *
+# *   it under the terms of the GNU Lesser General Public License (LGPL)    *
+# *   as published by the Free Software Foundation; either version 2 of     *
+# *   the License, or (at your option) any later version.                   *
+# *   for detail see the LICENCE text file.                                 *
+# *                                                                         *
+# *   This program is distributed in the hope that it will be useful,       *
+# *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+# *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+# *   GNU Library General Public License for more details.                  *
+# *                                                                         *
+# *   You should have received a copy of the GNU Library General Public     *
+# *   License along with this program; if not, write to the Free Software   *
+# *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
+# *   USA                                                                   *
+# *                                                                         *
+# ***************************************************************************
 
 from __future__ import print_function
 
@@ -39,10 +39,11 @@ import Draft
 import Arch
 import DraftVecUtils
 import ArchIFCSchema
+import exportIFCHelper
+
 from DraftGeomUtils import vec
-from importIFC import recycler
-from importIFC import dd2dms
-from importIFC import decode
+from importIFCHelper import dd2dms
+from importIFCHelper import decode
 
 
 ## @package exportIFC
@@ -94,7 +95,6 @@ DATA;
 #8=IFCCARTESIANPOINT((0.,0.,0.));
 #9=IFCAXIS2PLACEMENT3D(#8,#7,#6);
 #10=IFCDIRECTION((0.,1.,0.));
-#11=IFCGEOMETRICREPRESENTATIONCONTEXT('Plan','Model',3,1.E-05,#9,#10);
 #12=IFCDIMENSIONALEXPONENTS(0,0,0,0,0,0,0);
 #13=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
 #14=IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.);
@@ -103,7 +103,6 @@ DATA;
 #17=IFCMEASUREWITHUNIT(IFCPLANEANGLEMEASURE(0.017453292519943295),#16);
 #18=IFCCONVERSIONBASEDUNIT(#12,.PLANEANGLEUNIT.,'DEGREE',#17);
 #19=IFCUNITASSIGNMENT((#13,#14,#15,#18));
-#20=IFCPROJECT('$projectid',#5,'$project',$,$,$,$,(#11),#19);
 ENDSEC;
 END-ISO-10303-21;
 """
@@ -111,7 +110,7 @@ END-ISO-10303-21;
 
 # ************************************************************************************************
 # ********** duplicate methods ****************
-# TODO red rid of this duplicate
+# TODO get rid of this duplicate
 
 def getPreferences():
 
@@ -196,8 +195,6 @@ def export(exportList,filename,colors=None):
     template = template.replace("$company",FreeCAD.ActiveDocument.Company)
     template = template.replace("$email",email)
     template = template.replace("$now",str(int(time.time())))
-    template = template.replace("$projectid",FreeCAD.ActiveDocument.Uid[:22].replace("-","_"))
-    template = template.replace("$project",FreeCAD.ActiveDocument.Name)
     template = template.replace("$filename",os.path.basename(filename))
     template = template.replace("$timestamp",str(time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())))
     if hasattr(ifcopenshell,"version"):
@@ -212,12 +209,7 @@ def export(exportList,filename,colors=None):
     global ifcfile, surfstyles, clones, sharedobjects, profiledefs, shapedefs
     ifcfile = ifcopenshell.open(templatefile)
     history = ifcfile.by_type("IfcOwnerHistory")[0]
-    context = ifcfile.by_type("IfcGeometricRepresentationContext")[0]
-    project = ifcfile.by_type("IfcProject")[0]
     objectslist = Draft.getGroupContents(exportList,walls=True,addgroups=True)
-    if(Draft.getObjectsOfType(objectslist, "Site")):  # we assume one site and one representation context only
-        trueNorthX = math.tan(-Draft.getObjectsOfType(objectslist, "Site")[0].Declination.getValueAs(FreeCAD.Units.Radian))
-        context.TrueNorth.DirectionRatios = (trueNorthX, 1., 1.)
     annotations = []
     for obj in objectslist:
         if obj.isDerivedFrom("Part::Part2DObject"):
@@ -234,6 +226,16 @@ def export(exportList,filename,colors=None):
     objectslist = [obj for obj in objectslist if Draft.getType(obj) not in ["Dimension","Material","MaterialContainer","WorkingPlaneProxy"]]
     if FULL_PARAMETRIC:
         objectslist = Arch.getAllChildren(objectslist)
+
+    contextCreator = exportIFCHelper.ContextCreator(ifcfile, objectslist)
+    context = contextCreator.model_view_subcontext
+    project = contextCreator.project
+    objectslist = [obj for obj in objectslist if obj != contextCreator.project_object]
+
+    if Draft.getObjectsOfType(objectslist, "Site"):  # we assume one site and one representation context only
+        trueNorthX = math.tan(-Draft.getObjectsOfType(objectslist, "Site")[0].Declination.getValueAs(FreeCAD.Units.Radian))
+        contextCreator.model_context.TrueNorth.DirectionRatios = (trueNorthX, 1., 1.)
+
     products = {} # { Name: IfcEntity, ... }
     subproducts = {} # { Name: IfcEntity, ... } for storing additions/subtractions and other types of subcomponents of a product
     surfstyles = {} # { (r,g,b): IfcEntity, ... }
@@ -248,7 +250,7 @@ def export(exportList,filename,colors=None):
     # reusable entity system
 
     global ifcbin
-    ifcbin = recycler(ifcfile)
+    ifcbin = exportIFCHelper.recycler(ifcfile)
 
     # build clones table
 
@@ -262,6 +264,7 @@ def export(exportList,filename,colors=None):
     #print(objectslist)
 
     # testing if more than one site selected (forbidden in IFC)
+    # TODO: Moult: This is not forbidden in IFC.
 
     if len(Draft.getObjectsOfType(objectslist,"Site")) > 1:
         FreeCAD.Console.PrintError("More than one site is selected, which is forbidden by IFC standards. Please export only one site by IFC file.\n")
@@ -593,7 +596,7 @@ def export(exportList,filename,colors=None):
                 #if DEBUG : print("      adding ifc attributes")
                 props = []
                 for key in obj.IfcData:
-                    if not (key in ["attributes","IfcUID","FlagForceBrep"]):
+                    if not (key in ["attributes", "complex_attributes", "IfcUID", "FlagForceBrep"]):
 
                         # (deprecated) properties in IfcData dict are stored as "key":"type(value)"
 
@@ -872,7 +875,7 @@ def export(exportList,filename,colors=None):
 
     # sites
 
-    for site in Draft.getObjectsOfType(objectslist,"Site"):
+    for site in exportIFCHelper.getObjectsOfIfcType(objectslist, "Site"):
         objs = Draft.getGroupContents(site,walls=True,addgroups=True)
         objs = Arch.pruneIncluded(objs)
         children = []
