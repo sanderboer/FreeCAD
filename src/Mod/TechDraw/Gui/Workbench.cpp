@@ -55,6 +55,7 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     *draw << "TechDraw_NewPage";
     *draw << "Separator";
     *draw << "TechDraw_NewView";
+    *draw << "TechDraw_NewActiveView";
 //    *draw << "TechDraw_NewMulti";     //deprecated
     *draw << "TechDraw_ProjGroup";
     *draw << "TechDraw_NewViewSection";
@@ -86,7 +87,7 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     *draw << "TechDraw_Symbol";
     *draw << "TechDraw_Image";
     *draw << "TechDraw_ToggleFrame";
-//    *decor << "TechDraw_RedrawPage";
+    *draw << "TechDraw_Redraw";
     *draw << "Separator";
     *draw << "TechDraw_Annotation";
     *draw << "TechDraw_LeaderLine";
@@ -115,6 +116,7 @@ Gui::ToolBarItem* Workbench::setupToolBars() const
     Gui::ToolBarItem *views = new Gui::ToolBarItem(root);
     views->setCommand("TechDraw Views");
     *views << "TechDraw_NewView";
+    *views << "TechDraw_NewActiveView";
 //    *views << "TechDraw_NewMulti";    //deprecated
     *views << "TechDraw_ProjGroup";
     *views << "TechDraw_NewViewSection";
@@ -154,7 +156,7 @@ Gui::ToolBarItem* Workbench::setupToolBars() const
     *decor << "TechDraw_Symbol";
     *decor << "TechDraw_Image";
     *decor << "TechDraw_ToggleFrame";
-//    *decor << "TechDraw_RedrawPage";
+    *decor << "TechDraw_Redraw";
 
     Gui::ToolBarItem *anno = new Gui::ToolBarItem(root);
     anno->setCommand("TechDraw Annotation");
@@ -184,6 +186,7 @@ Gui::ToolBarItem* Workbench::setupCommandBars() const
     Gui::ToolBarItem *views = new Gui::ToolBarItem(root);
     views->setCommand("Views");
     *views << "TechDraw_NewView";
+    *views << "TechDraw_NewActiveView";
 //    *views << "TechDraw_NewMulti";    //deprecated
     *views << "TechDraw_ProjGroup";
     *views << "TechDraw_NewViewSection";
@@ -222,6 +225,7 @@ Gui::ToolBarItem* Workbench::setupCommandBars() const
     *decor << "TechDraw_Symbol";
     *decor << "TechDraw_Image";
     *decor << "TechDraw_ToggleFrame";
+    *decor << "TechDraw_Redraw";
 
     Gui::ToolBarItem *anno = new Gui::ToolBarItem(root);
     anno->setCommand("TechDraw Annotation");

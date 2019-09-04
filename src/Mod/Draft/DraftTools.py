@@ -52,6 +52,7 @@ from pivy import coin
 
 import DraftEdit
 # import DraftFillet
+import DraftSelectPlane
 
 #---------------------------------------------------------------------------
 # Preflight stuff
@@ -324,218 +325,6 @@ class DraftTool:
 
         return qr,sup,points,fil
 
-#---------------------------------------------------------------------------
-# Helper tools
-#---------------------------------------------------------------------------
-
-class SelectPlane(DraftTool):
-    """The Draft_SelectPlane FreeCAD command definition"""
-
-    def GetResources(self):
-        return {'Pixmap'  : 'Draft_SelectPlane',
-                'Accel' : "W, P",
-                'MenuText': QtCore.QT_TRANSLATE_NOOP("Draft_SelectPlane", "SelectPlane"),
-                'ToolTip' : QtCore.QT_TRANSLATE_NOOP("Draft_SelectPlane", "Select a working plane for geometry creation")}
-
-    def Activated(self):
-        DraftTool.Activated(self)
-        self.offset = 0
-        if not self.doc:
-            return
-        if self.handle():
-            return
-        self.ui.selectPlaneUi()
-        FreeCAD.Console.PrintMessage(translate("draft", "Pick a face to define the drawing plane")+"\n")
-        if plane.alignToSelection(self.offset):
-            FreeCADGui.Selection.clearSelection()
-            self.display(plane.axis)
-            self.finish()
-        else:
-            self.call = self.view.addEventCallback("SoEvent", self.action)
-
-    def action(self, arg):
-        if arg["Type"] == "SoKeyboardEvent" and arg["Key"] == "ESCAPE":
-            self.finish()
-        if arg["Type"] == "SoMouseButtonEvent":
-            if (arg["State"] == "DOWN") and (arg["Button"] == "BUTTON1"):
-                # coin detection happens before the selection got a chance of being updated, so we must delay
-                DraftGui.todo.delay(self.checkSelection,None)
-
-    def checkSelection(self):
-        if self.handle():
-            self.finish()
-
-    def handle(self):
-        sel = FreeCADGui.Selection.getSelectionEx()
-        if len(sel) == 1:
-            sel = sel[0]
-            self.ui = FreeCADGui.draftToolBar
-            if Draft.getType(sel.Object) == "Axis":
-                plane.alignToEdges(sel.Object.Shape.Edges)
-                self.display(plane.axis)
-                return True
-            elif Draft.getType(sel.Object) in ["WorkingPlaneProxy","BuildingPart"]:
-                plane.setFromPlacement(sel.Object.Placement,rebase=True)
-                plane.weak = False
-                if hasattr(sel.Object.ViewObject,"AutoWorkingPlane"):
-                    if sel.Object.ViewObject.AutoWorkingPlane:
-                        plane.weak = True
-                if hasattr(sel.Object.ViewObject,"CutView") and hasattr(sel.Object.ViewObject,"AutoCutView"):
-                    if sel.Object.ViewObject.AutoCutView:
-                        sel.Object.ViewObject.CutView = True
-                if hasattr(sel.Object.ViewObject,"RestoreView"):
-                    if sel.Object.ViewObject.RestoreView:
-                        if hasattr(sel.Object.ViewObject,"ViewData"):
-                            if len(sel.Object.ViewObject.ViewData) >= 12:
-                                d = sel.Object.ViewObject.ViewData
-                                camtype = "orthographic"
-                                if len(sel.Object.ViewObject.ViewData) == 13:
-                                    if d[12] == 1:
-                                        camtype = "perspective"
-                                c = FreeCADGui.ActiveDocument.ActiveView.getCameraNode()
-                                from pivy import coin
-                                if isinstance(c,coin.SoOrthographicCamera):
-                                    if camtype == "perspective":
-                                        FreeCADGui.ActiveDocument.ActiveView.setCameraType("Perspective")
-                                elif isinstance(c,coin.SoPerspectiveCamera):
-                                    if camtype == "orthographic":
-                                        FreeCADGui.ActiveDocument.ActiveView.setCameraType("Orthographic")
-                                c = FreeCADGui.ActiveDocument.ActiveView.getCameraNode()
-                                c.position.setValue([d[0],d[1],d[2]])
-                                c.orientation.setValue([d[3],d[4],d[5],d[6]])
-                                c.nearDistance.setValue(d[7])
-                                c.farDistance.setValue(d[8])
-                                c.aspectRatio.setValue(d[9])
-                                c.focalDistance.setValue(d[10])
-                                if camtype == "orthographic":
-                                    c.height.setValue(d[11])
-                                else:
-                                    c.heightAngle.setValue(d[11])
-                if hasattr(sel.Object.ViewObject,"RestoreState"):
-                    if sel.Object.ViewObject.RestoreState:
-                        if hasattr(sel.Object.ViewObject,"VisibilityMap"):
-                            if sel.Object.ViewObject.VisibilityMap:
-                                for k,v in sel.Object.ViewObject.VisibilityMap.items():
-                                    o = FreeCADGui.ActiveDocument.getObject(k)
-                                    if o:
-                                        if o.Visibility != (v == "True"):
-                                            FreeCADGui.doCommand("FreeCADGui.ActiveDocument.getObject(\""+k+"\").Visibility = "+v)
-                self.display(plane.axis)
-                self.ui.wplabel.setText(sel.Object.Label)
-                self.ui.wplabel.setToolTip(translate("draft", "Current working plane")+": "+self.ui.wplabel.text())
-                return True
-            elif Draft.getType(sel.Object) == "SectionPlane":
-                plane.setFromPlacement(sel.Object.Placement,rebase=True)
-                plane.weak = False
-                self.display(plane.axis)
-                self.ui.wplabel.setText(sel.Object.Label)
-                self.ui.wplabel.setToolTip(translate("draft", "Current working plane")+": "+self.ui.wplabel.text())
-                return True
-            elif sel.HasSubObjects:
-                if len(sel.SubElementNames) == 1:
-                    if "Face" in sel.SubElementNames[0]:
-                        plane.alignToFace(sel.SubObjects[0], self.offset)
-                        self.display(plane.axis)
-                        return True
-                    elif sel.SubElementNames[0] == "Plane":
-                        plane.setFromPlacement(sel.Object.Placement,rebase=True)
-                        self.display(plane.axis)
-                        return True
-                elif len(sel.SubElementNames) == 3:
-                    if ("Vertex" in sel.SubElementNames[0]) \
-                    and ("Vertex" in sel.SubElementNames[1]) \
-                    and ("Vertex" in sel.SubElementNames[2]):
-                        plane.alignTo3Points(sel.SubObjects[0].Point,
-                                             sel.SubObjects[1].Point,
-                                             sel.SubObjects[2].Point,
-                                             self.offset)
-                        self.display(plane.axis)
-                        return True
-            elif sel.Object.isDerivedFrom("Part::Feature"):
-                if sel.Object.Shape:
-                    if len(sel.Object.Shape.Faces) == 1:
-                        plane.alignToFace(sel.Object.Shape.Faces[0], self.offset)
-                        self.display(plane.axis)
-                        return True
-        elif sel:
-            subs = []
-            import Part
-            for s in sel:
-                for so in s.SubObjects:
-                    if isinstance(so,Part.Vertex):
-                        subs.append(so)
-            if len(subs) == 3:
-                plane.alignTo3Points(subs[0].Point,
-                                     subs[1].Point,
-                                     subs[2].Point,
-                                     self.offset)
-                self.display(plane.axis)
-                return True
-        return False
-
-    def getCenterPoint(self,x,y,z):
-        if not self.ui.isCenterPlane:
-            return "0,0,0"
-        v = FreeCAD.Vector(x,y,z)
-        cam1 = FreeCAD.Vector(FreeCADGui.ActiveDocument.ActiveView.getCameraNode().position.getValue().getValue())
-        cam2 = FreeCADGui.ActiveDocument.ActiveView.getViewDirection()
-        vcam1 = DraftVecUtils.project(cam1,v)
-        a = vcam1.getAngle(cam2)
-        if a < 0.0001:
-            return "0,0,0"
-        d = vcam1.Length
-        L = d/math.cos(a)
-        vcam2 = DraftVecUtils.scaleTo(cam2,L)
-        cp = cam1.add(vcam2)
-        return str(cp.x)+","+str(cp.y)+","+str(cp.z)
-
-    def selectHandler(self, arg):
-        try:
-            self.offset = float(self.ui.offset)
-        except:
-            self.offset = 0
-        if arg == "XY":
-            FreeCADGui.doCommandGui("FreeCAD.DraftWorkingPlane.alignToPointAndAxis(FreeCAD.Vector("+self.getCenterPoint(0,0,1)+"), FreeCAD.Vector(0,0,1), "+str(self.offset)+")")
-            self.display('Top')
-            self.finish()
-        elif arg == "XZ":
-            FreeCADGui.doCommandGui("FreeCAD.DraftWorkingPlane.alignToPointAndAxis(FreeCAD.Vector("+self.getCenterPoint(0,-1,0)+"), FreeCAD.Vector(0,-1,0), "+str(self.offset)+")")
-            self.display('Front')
-            self.finish()
-        elif arg == "YZ":
-            FreeCADGui.doCommandGui("FreeCAD.DraftWorkingPlane.alignToPointAndAxis(FreeCAD.Vector("+self.getCenterPoint(1,0,0)+"), FreeCAD.Vector(1,0,0), "+str(self.offset)+")")
-            self.display('Side')
-            self.finish()
-        elif arg == "currentView":
-            d = self.view.getViewDirection().negative()
-            FreeCADGui.doCommandGui("FreeCAD.DraftWorkingPlane.alignToPointAndAxis(FreeCAD.Vector("+self.getCenterPoint(d.x,d.y,d.z)+"), FreeCAD.Vector("+str(d.x)+","+str(d.y)+","+str(d.z)+"), "+str(self.offset)+")")
-            self.display(d)
-            self.finish()
-        elif arg == "reset":
-            FreeCADGui.doCommandGui("FreeCAD.DraftWorkingPlane.reset()")
-            self.display('Auto')
-            self.finish()
-        elif arg == "alignToWP":
-            c = FreeCADGui.ActiveDocument.ActiveView.getCameraNode()
-            r = FreeCAD.DraftWorkingPlane.getRotation().Rotation.Q
-            c.orientation.setValue(r)
-            self.finish()
-
-    def offsetHandler(self, arg):
-        self.offset = arg
-
-    def display(self,arg):
-        if self.offset:
-            if self.offset > 0: suffix = ' + '+str(self.offset)
-            else: suffix = ' - '+str(self.offset)
-        else: suffix = ''
-        if type(arg).__name__  == 'str':
-            self.ui.wplabel.setText(arg+suffix)
-        elif type(arg).__name__ == 'Vector':
-            plv = 'd('+str(arg.x)+','+str(arg.y)+','+str(arg.z)+')'
-            self.ui.wplabel.setText(plv+suffix)
-        self.ui.wplabel.setToolTip(translate("draft", "Current working plane:",utf8_decode=True)+self.ui.wplabel.text())
-        FreeCADGui.doCommandGui("FreeCADGui.Snapper.setGrid()")
 
 #---------------------------------------------------------------------------
 # Geometry constructors
@@ -1532,14 +1321,16 @@ class Arc(Creator):
                         if self.closedCircle:
                             self.drawArc()
                         else:
-                            self.ui.labelRadius.setText("Start angle")
+                            self.ui.labelRadius.setText(translate("draft","Start angle"))
+                            self.ui.radiusValue.setToolTip(translate("draft","Start angle"))
                             self.ui.radiusValue.setText(FreeCAD.Units.Quantity(0,FreeCAD.Units.Angle).UserString)
                             self.linetrack.p1(self.center)
                             self.linetrack.on()
                             self.step = 2
                             FreeCAD.Console.PrintMessage(translate("draft", "Pick start angle")+"\n")
                     elif (self.step == 2): # choose first angle
-                        self.ui.labelRadius.setText("Aperture")
+                        self.ui.labelRadius.setText(translate("draft","Aperture angle"))
+                        self.ui.radiusValue.setToolTip(translate("draft","Aperture angle"))
                         self.step = 3
                         # scale center->point vector for proper display
                         # u = DraftVecUtils.scaleTo(self.point.sub(self.center), self.rad) obsolete?
@@ -1649,14 +1440,16 @@ class Arc(Creator):
             else:
                 self.step = 2
                 self.arctrack.setCenter(self.center)
-                self.ui.labelRadius.setText(translate("draft", "Start Angle"))
+                self.ui.labelRadius.setText(translate("draft", "Start angle"))
+                self.ui.radiusValue.setToolTip(translate("draft", "Start angle"))
                 self.linetrack.p1(self.center)
                 self.linetrack.on()
                 self.ui.radiusValue.setText("")
                 self.ui.radiusValue.setFocus()
                 FreeCAD.Console.PrintMessage(translate("draft", "Pick start angle")+"\n")
         elif (self.step == 2):
-            self.ui.labelRadius.setText(translate("draft", "Aperture"))
+            self.ui.labelRadius.setText(translate("draft", "Aperture angle"))
+            self.ui.radiusValue.setToolTip(translate("draft", "Aperture angle"))
             self.firstangle = math.radians(rad)
             if DraftVecUtils.equals(plane.axis, Vector(1,0,0)): u = Vector(0,self.rad,0)
             else: u = DraftVecUtils.scaleTo(Vector(1,0,0).cross(plane.axis), self.rad)
@@ -2813,7 +2606,7 @@ class Rotate(Modifier):
         self.selected_subelements = FreeCADGui.Selection.getSelectionEx()
         self.step = 0
         self.center = None
-        self.ui.arcUi()
+        self.ui.rotateSetCenterUi()
         self.ui.modUi()
         self.ui.setTitle(translate("draft","Rotate"))
         self.arctrack = arcTracker()
@@ -2892,6 +2685,7 @@ class Rotate(Modifier):
         self.ui.radiusValue.setText(FreeCAD.Units.Quantity(0,FreeCAD.Units.Angle).UserString)
         self.ui.hasFill.hide()
         self.ui.labelRadius.setText(translate("draft","Base angle"))
+        self.ui.radiusValue.setToolTip(translate("draft","The base angle you wish to start the rotation from"))
         self.arctrack.setCenter(self.center)
         for ghost in self.ghosts:
             ghost.center(self.center)
@@ -2902,6 +2696,7 @@ class Rotate(Modifier):
 
     def set_start_point(self):
         self.ui.labelRadius.setText(translate("draft","Rotation"))
+        self.ui.radiusValue.setToolTip(translate("draft", "The amount of rotation you wish to perform. The final angle will be the base angle plus this amount."))
         self.rad = DraftVecUtils.dist(self.point,self.center)
         self.arctrack.on()
         self.arctrack.setStartPoint(self.point)
@@ -3029,6 +2824,8 @@ class Rotate(Modifier):
         self.ui.radiusUi()
         self.ui.hasFill.hide()
         self.ui.labelRadius.setText(translate("draft","Base angle"))
+        self.ui.radiusValue.setToolTip(translate("draft","The base angle you wish to start the rotation from"))
+        self.ui.radiusValue.setText(FreeCAD.Units.Quantity(0,FreeCAD.Units.Angle).UserString)
         self.step = 1
         FreeCAD.Console.PrintMessage(translate("draft", "Pick base angle")+"\n")
 
@@ -3036,6 +2833,8 @@ class Rotate(Modifier):
         """this function gets called by the toolbar when valid radius have been entered there"""
         if (self.step == 1):
             self.ui.labelRadius.setText(translate("draft","Rotation"))
+            self.ui.radiusValue.setToolTip(translate("draft","The amount of rotation you wish to perform. The final angle will be the base angle plus this amount."))
+            self.ui.radiusValue.setText(FreeCAD.Units.Quantity(0,FreeCAD.Units.Angle).UserString)
             self.firstangle = math.radians(rad)
             self.arctrack.setStartAngle(self.firstangle)
             self.arctrack.on()
@@ -3904,7 +3703,8 @@ class Trimex(Modifier):
             dist = v1.sub(self.newpoint).Length
             ghost.p1(self.newpoint)
             ghost.p2(v2)
-            self.ui.labelRadius.setText("Distance")
+            self.ui.labelRadius.setText(translate("draft","Distance"))
+            self.ui.radiusValue.setToolTip(translate("draft", "The offset distance"))
             if real:
                 if self.force:
                     ray = self.newpoint.sub(v1)
@@ -3917,7 +3717,8 @@ class Trimex(Modifier):
             ang1 = DraftVecUtils.angle(v2.sub(center))
             ang2 = DraftVecUtils.angle(point.sub(center))
             self.newpoint=Vector.add(center,DraftVecUtils.rotate(Vector(rad,0,0),-ang2))
-            self.ui.labelRadius.setText("Angle")
+            self.ui.labelRadius.setText(translate("draft","Angle"))
+            self.ui.radiusValue.setToolTip(translate("draft", "The offset angle"))
             dist = math.degrees(-ang2)
             # if ang1 > ang2: ang1,ang2 = ang2,ang1
             #print("last calculated:",math.degrees(-ang1),math.degrees(-ang2))
@@ -4264,15 +4065,38 @@ class Scale(Modifier):
                         DraftVecUtils.toString(self.center)))
         command.append('FreeCAD.ActiveDocument.recompute()')
         return command
+    
+    def is_scalable(self,obj):
+        t = Draft.getType(obj)
+        if t in ["Rectangle","Wire","Annotation","BSpline"]:
+            # TODO - support more types in Draft.scale
+            return True
+        else:
+            return False
 
     def scale_object(self):
         if self.task.relative.isChecked():
             self.delta = FreeCAD.DraftWorkingPlane.getGlobalCoords(self.delta)
-        objects = '[' + ','.join(['FreeCAD.ActiveDocument.' + object.Name for object in self.selected_objects]) + ']'
-        FreeCADGui.addModule("Draft")
-        self.commit(translate("draft","Copy" if self.task.isCopy.isChecked() else "Scale"),
-                    ['Draft.scale('+objects+',scale='+DraftVecUtils.toString(self.delta)+',center='+DraftVecUtils.toString(self.center)+',copy='+str(self.task.isCopy.isChecked())+')',
-                     'FreeCAD.ActiveDocument.recompute()'])
+        goods = []
+        bads = []
+        for obj in self.selected_objects:
+            if self.is_scalable(obj):
+                goods.append(obj)
+            else:
+                bads.append(obj)
+        if bads:
+            if len(bads) == 1:
+                m = translate("draft","Unable to scale object")+": "+bads[0].Label
+            else:
+                m = translate("draft","Unable to scale objects")+": "+",".join([o.Label for o in bads])
+            m += " - "+translate("draft","This object type cannot be scaled directly. Please use the clone method.")+"\n"
+            FreeCAD.Console.PrintError(m)
+        if goods:
+            objects = '[' + ','.join(['FreeCAD.ActiveDocument.' + obj.Name for obj in goods]) + ']'
+            FreeCADGui.addModule("Draft")
+            self.commit(translate("draft","Copy" if self.task.isCopy.isChecked() else "Scale"),
+                        ['Draft.scale('+objects+',scale='+DraftVecUtils.toString(self.delta)+',center='+DraftVecUtils.toString(self.center)+',copy='+str(self.task.isCopy.isChecked())+')',
+                         'FreeCAD.ActiveDocument.recompute()'])
 
     def scaleGhost(self,x,y,z,rel):
         delta = Vector(x,y,z)
@@ -5390,28 +5214,6 @@ class SetAutoGroup():
                 self.ui.setAutoGroup(self.groups[i])
 
 
-class SetWorkingPlaneProxy():
-    """The SetWorkingPlaneProxy FreeCAD command definition"""
-
-    def GetResources(self):
-        return {'Pixmap'  : 'Draft_SelectPlane',
-                'MenuText': QtCore.QT_TRANSLATE_NOOP("Draft_SetWorkingPlaneProxy", "Create Working Plane Proxy"),
-                'ToolTip': QtCore.QT_TRANSLATE_NOOP("Draft_SetWorkingPlaneProxy", "Creates a proxy object from the current working plane")}
-
-    def IsActive(self):
-        if FreeCADGui.ActiveDocument:
-            return True
-        else:
-            return False
-
-    def Activated(self):
-        if hasattr(FreeCAD,"DraftWorkingPlane"):
-            FreeCAD.ActiveDocument.openTransaction("Create WP proxy")
-            FreeCADGui.addModule("Draft")
-            FreeCADGui.doCommand("Draft.makeWorkingPlaneProxy(FreeCAD.DraftWorkingPlane.getPlacement())")
-            FreeCAD.ActiveDocument.recompute()
-            FreeCAD.ActiveDocument.commitTransaction()
-
 
 class Draft_Label(Creator):
     """The Draft_Label command definition"""
@@ -5628,7 +5430,8 @@ class Draft_Arc_3Points:
                 placement = FreeCAD.Placement(e.Curve.Center,rot)
                 start = e.FirstParameter
                 end = e.LastParameter/math.pi*180
-                Draft.makeCircle(radius,placement,startangle=start,endangle=end)
+                c = Draft.makeCircle(radius,placement,startangle=start,endangle=end)
+                Draft.autogroup(c)
             self.tracker.off()
             FreeCAD.ActiveDocument.recompute()
 
@@ -5826,7 +5629,7 @@ class Draft_Snap_WorkingPlane():
 #---------------------------------------------------------------------------
 
 # drawing commands
-FreeCADGui.addCommand('Draft_SelectPlane',SelectPlane())
+
 FreeCADGui.addCommand('Draft_Line',Line())
 FreeCADGui.addCommand('Draft_Wire',Wire())
 FreeCADGui.addCommand('Draft_Circle',Circle())
@@ -5907,7 +5710,6 @@ FreeCADGui.addCommand('Draft_ShowSnapBar',ShowSnapBar())
 FreeCADGui.addCommand('Draft_ToggleGrid',ToggleGrid())
 FreeCADGui.addCommand('Draft_FlipDimension',Draft_FlipDimension())
 FreeCADGui.addCommand('Draft_AutoGroup',SetAutoGroup())
-FreeCADGui.addCommand('Draft_SetWorkingPlaneProxy',SetWorkingPlaneProxy())
 FreeCADGui.addCommand('Draft_AddConstruction',Draft_AddConstruction())
 
 # snap commands

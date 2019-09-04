@@ -592,7 +592,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                                             const Gui::View3DInventorViewer *viewer)
 {
     assert(edit);
-    App::AutoTransaction comitter;
+    App::AutoTransaction committer;
 
     // Calculate 3d point to the mouse position
     SbLine line;
@@ -4326,6 +4326,16 @@ Restart:
             // root separator for this constraint
             SoSeparator *sep = static_cast<SoSeparator *>(edit->constrGroup->getChild(i));
             const Constraint *Constr = *it;
+
+            if(Constr->First < -extGeoCount || Constr->First >= intGeoCount 
+                    || (Constr->Second!=Constraint::GeoUndef 
+                        && (Constr->Second < -extGeoCount || Constr->Second >= intGeoCount))
+                    || (Constr->Third!=Constraint::GeoUndef 
+                        && (Constr->Third < -extGeoCount || Constr->Third >= intGeoCount)))
+            {
+                // Constraint can refer to non-existent geometry during undo/redo
+                continue;
+            }
 
             // distinquish different constraint types to build up
             switch (Constr->Type) {

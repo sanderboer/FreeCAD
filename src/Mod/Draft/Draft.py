@@ -1648,6 +1648,8 @@ def move(objectslist,vector,copy=False):
                     g = newgroups.setdefault(p.Name,FreeCAD.ActiveDocument.addObject(p.TypeId,p.Name))
                     g.addObject(newobj)
                     break
+                if getType(p) == "Layer":
+                    p.Proxy.addObject(p,newobj)
     if copy and getParam("selectBaseObjects",False):
         select(objectslist)
     else:
@@ -5708,6 +5710,9 @@ class _DraftLink(_DraftObject):
         if self.useLink:
             obj.addExtension('App::LinkExtensionPython', None)
             self.linkSetup(obj)
+
+    def canLinkProperties(self,_obj):
+        return False
 
     def linkSetup(self,obj):
         obj.configLinkProperty('Placement',LinkedObject='Base')

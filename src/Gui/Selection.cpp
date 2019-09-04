@@ -437,7 +437,7 @@ bool SelectionSingleton::hasSelection(const char* doc, bool resolve) const
     return false;
 }
 
-bool SelectionSingleton::hasSubSelection(const char* doc) const
+bool SelectionSingleton::hasSubSelection(const char* doc, bool subElement) const
 {
     App::Document *pcDoc = 0;
     if(!doc || strcmp(doc,"*")!=0) {
@@ -446,11 +446,14 @@ bool SelectionSingleton::hasSubSelection(const char* doc) const
             return false;
     }
     for(auto &sel : _SelList) {
-        if((!pcDoc || pcDoc == sel.pDoc)
-                && sel.pObject != sel.pResolvedObject)
-        {
+        if(pcDoc && pcDoc != sel.pDoc)
+            continue;
+        if(sel.SubName.empty())
+            continue;
+        if(subElement && sel.SubName.back()!='.')
             return true;
-        }
+        if(sel.pObject != sel.pResolvedObject)
+            return true;
     }
 
     return false;
@@ -1233,6 +1236,7 @@ bool SelectionSingleton::updateSelection(bool show, const char* pDocName,
     FC_LOG("Update Selection "<<Chng.DocName << '#' << Chng.ObjName << '.' <<Chng.SubName);
 
     notify(std::move(Chng));
+
     return true;
 }
 
@@ -1337,6 +1341,12 @@ void SelectionSingleton::setVisible(int visible) {
     else if(visible>0)
         visible = 1;
     for(auto &sel : _SelList) {
+        //Note: if selection is changed while processing this list, the contents of _SelList will be 
+        //changed during loop execution.  This may cause crash here when a "non-entry" is processed.
+//        if (_SelList.size() == 0) {
+//            Base::Console().Log("Gui::SS::setVisible - _SelList altered during loop - break!\n");
+//            break;
+//        }
         if(sel.DocName.empty() || sel.FeatName.empty() || !sel.pObject) 
             continue;
         // get parent object
@@ -1350,7 +1360,6 @@ void SelectionSingleton::setVisible(int visible) {
             // prevent setting the same object visibility more than once
             if(!filter.insert(std::make_pair(obj,parent)).second)
                 continue;
-
             int vis = parent->isElementVisible(elementName.c_str());
             if(vis>=0) {
                 if(vis>0) vis = 1;
@@ -1371,11 +1380,12 @@ void SelectionSingleton::setVisible(int visible) {
 
             // Fall back to direct object visibility setting
         }
-
-        if(!filter.insert(std::make_pair(obj,(App::DocumentObject*)0)).second)
+        if(!filter.insert(std::make_pair(obj,(App::DocumentObject*)0)).second){
             continue;
+        }
 
         auto vp = Application::Instance->getViewProvider(obj);
+
         if(vp) {
             int vis;
             if(visible>=0)
@@ -1572,7 +1582,7 @@ int SelectionSingleton::checkSelection(const char *pDocName, const char *pObject
     if(!selList)
         selList = &_SelList;
     for (auto &s : *selList) {
-        if (s.DocName==pDocName && s.FeatName==pObjectName) {
+        if (s.DocName==pDocName && s.FeatName==sel.FeatName) {
             if(!pSubName || s.SubName==pSubName)
                 return 1;
             if(resolve>1 && boost::starts_with(s.SubName,prefix))
@@ -1787,7 +1797,7 @@ PyMethodDef SelectionSingleton::Methods[] = {
     {"hasSelection",      (PyCFunction) SelectionSingleton::sHasSelection, METH_VARARGS,
      "hasSelection(docName=None, resolve=False) -- check if there is any selection\n"},
     {"hasSubSelection",   (PyCFunction) SelectionSingleton::sHasSubSelection, METH_VARARGS,
-     "hasSubSelection(docName=None) -- check if there is any selection with subname\n"},
+     "hasSubSelection(docName=None,subElement=False) -- check if there is any selection with subname\n"},
     {"getSelectionFromStack",(PyCFunction) SelectionSingleton::sGetSelectionFromStack, METH_VARARGS,
      "getSelectionFromStack(docName=None,resolve=1,index=0) -- Return a list of SelectionObjects from selection stack\n"
      "\ndocName - document name. None means the active document, and '*' means all document"
@@ -2264,11 +2274,13 @@ PyObject *SelectionSingleton::sHasSelection(PyObject * /*self*/, PyObject *args)
 PyObject *SelectionSingleton::sHasSubSelection(PyObject * /*self*/, PyObject *args)
 {
     const char *doc = 0;
-    if (!PyArg_ParseTuple(args, "|s",&doc))
+    PyObject *subElement = Py_False;
+    if (!PyArg_ParseTuple(args, "|sO!",&doc,&PyBool_Type,&subElement))
         return NULL;                             // NULL triggers exception 
 
     PY_TRY {
-        return Py::new_reference_to(Py::Boolean(Selection().hasSubSelection(doc)));
+        return Py::new_reference_to(
+                Py::Boolean(Selection().hasSubSelection(doc,PyObject_IsTrue(subElement))));
     } PY_CATCH;
 }
 
