@@ -54,25 +54,9 @@ makedepends+=" qt5-x11extras-devel"
 makedepends+=" coin3-doc"
 makedepends+=" glew-devel"
 
-DATE=`date +%y%m%d`
-_inst_prefix="/opt/freecad-${DATE}"
-CMAKE_ARGS="-DBUILD_QT5=ON"
-CMAKE_ARGS+=" -DCMAKE_INSTALL_PREFIX=${_inst_prefix}"
-CMAKE_ARGS+=" -DCMAKE_INSTALL_LIBDIR=${_inst_prefix}/lib"
-CMAKE_ARGS+=" -DCMAKE_INSTALL_DATAROOTDIR=/usr/share"
-CMAKE_ARGS+=" -DFREECAD_USE_OCC_VARIANT=Official_Version"
-CMAKE_ARGS+=" -DPYTHON_EXECUTABLE=/usr/bin/python3.6"
-CMAKE_ARGS+=" -DPYTHON_INCLUDE_DIR=/usr/include/python3"
-CMAKE_ARGS+=" -DPYTHON_LIBRARAY=/usr/lib/libpython3.6m.so"
-CMAKE_ARGS+=" -DMEDFILE_INCLUDE_DIRS=/usr/include/med"
-
 hostmakedepends="pkg-config swig doxygen graphviz"
 
 
 sudo xbps-install -S ${makedepends}
+sudo xbps-install -S ${hostmakedepends}
 
-mkdir build
-pushd build
-cmake ${CMAKE_ARGS} /Projects/Github/freecad_sndr
-cmake --build -j 6 .
-popd
