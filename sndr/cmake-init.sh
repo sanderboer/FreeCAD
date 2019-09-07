@@ -25,5 +25,5 @@ CMAKE_ARGS+=" -DPYTHON_INCLUDE_DIRS=${PY_INC}"
 mkdir ${BUILD_DIR}
 pushd ${BUILD_DIR}
 cmake ${CMAKE_ARGS} ${ROOT_DIR}
-cmake --build . -j ${NUM_BUILD_PROCS}
+# cmake --build . -j ${NUM_BUILD_PROCS}
 popd
