@@ -3,6 +3,9 @@ DIR="$( cd -P "$( dirname "$0" )" && pwd )"
 source $DIR/env.sh
 
 CMAKE_ARGS="-DBUILD_QT5=ON"
+#CMAKE_ARGS+=" -DCMAKE_MODULE_PATH=/opt/coin4/lib64/cmake/"
+CMAKE_ARGS+=" -DCOIN3D_INCLUDE_DIRS=/opt/coin4/include/"
+CMAKE_ARGS+=" -DCOIN3D_LIBRARIES=/opt/coin4/lib64/libCoin.so.4.0.0"
 CMAKE_ARGS+=" -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 CMAKE_ARGS+=" -DCMAKE_INSTALL_LIBDIR=${INSTALL_DIR}/lib"
 CMAKE_ARGS+=" -DCMAKE_INSTALL_DATAROOTDIR=${INSTALL_DIR}/usr/share"
