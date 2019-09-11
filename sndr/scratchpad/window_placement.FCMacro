@@ -1,0 +1,200 @@
+import FreeCAD, Arch, uuid, Draft
+
+#base = FreeCAD.Vector(2000, 0, 0)
+#Axis = FreeCAD.Vector(1, 0, 0)
+#place= FreeCAD.Placement(base, FreeCAD.Rotation(Axis, 90))
+
+#Door = Arch.makeWindowPreset("Simple door", width=900, height=2300, h1=100,
+#                             h2=100, h3=100, w1=200, w2=100, o1=0, o2=100,
+#                             placement=place)
+
+doc = FreeCAD.ActiveDocument
+surf = doc.Surface001
+surf = doc.Shape001
+face = surf.Shape.Faces[0]
+srf = face.Surface
+u0,u1,v0,v1 = face.ParameterRange
+#u0,u1,v0,v1 = srf.bounds()
+unum = 10
+vnum = 10
+ustep = (u1 - u0) / unum
+vstep = (v1 - v0) / vnum
+
+#Part.show( face.Surface.uIso(u0).toShape() )
+height = -300
+offset = 50
+frame_thickness = 50
+frame_width = 15
+frame_inset = 5         
+glass_thickness = 25
+glass_offset =  frame_thickness * .6
+cmp = []
+glass = []
+frames = []
+
+# def flatten(seq, container=None):
+#     if container is None:
+#         container = []
+#     for s in seq.OutList:
+#         try:
+#             iter(s.OutList)  # check if it's iterable
+#         except TypeError:
+#             print("append name:"+s.Name)
+#             container.append(s)
+#         else:
+#             flatten(s, container)
+#     return container
+
+def flatten(seq, container=None):
+    if container is None:
+        container = []
+    for s in seq.OutList:
+        if len(s.OutList)==0:
+            print("append name:"+s.Name)
+            container.append(s)
+        else:
+            if not s in container:
+                container.append(s)
+            flatten(s, container)
+    return container
+
+try:
+    grp = doc.RESULT_GROUP
+except:
+    grp =  doc.addObject("App::DocumentObjectGroup","RESULT_GROUP")
+
+for x in flatten(grp) :
+    doc.removeObject(x.Name)
+
+def add_to_doc(shape, name="base", transparency=0, color=(0.8, 0.8, 0.8)):
+    name=name+"-"+str(uuid.uuid4())
+    p = doc.addObject("Part::Feature", name)
+    p.Shape = shape
+    p.ViewObject.DiffuseColor = color
+    p.ViewObject.Transparency = transparency
+    grp.addObject(p)
+
+def normal3p(p0, p1, p2):
+    dir_v0 = p1 -p0
+    dir_v1 = p1 -p2
+    dir = dir_v1.cross(dir_v0)
+    return dir.normalize()
+ 
+def make_window(p0,p1,p2, inset, thickness, width):
+    
+    polygon0 = Part.makePolygon([p0, p1, p2, p0 ])
+    inset0 = polygon0.makeOffset2D(-inset)
+    #i0 = Draft.makeWire(inset0)
+    #i0.MakeFace = False
+    inset1 = polygon0.makeOffset2D(-inset-width)
+
+    # frameface = Part.Face([inset0, inset1],"Part::FaceMakerBullseye")
+    #i1 = Draft.makeWire(inset1)
+    #i1.MakeFace = False
+    c = Part.Compound([inset0, inset1] )
+    # p = doc.addObject("Part::Compound", "wireCompound-"+str(uuid.uuid4()) )
+    # p.Links = [i0,i1]
+    p = doc.addObject("Part::Feature", "wireCompound-"+str(uuid.uuid4()) )
+    p.Shape = c
+ 
+    n = normal3p(p0,p1,p2)
+    w = Arch.makeWindow( p )
+    #w.Base = p
+    w.Normal = n
+    w.WindowParts=["WindowFrame","Frame","Wire0,Wire1",str(thickness),"0", "glass","Glass panel","Wire1","25","25"]
+    grp.addObject(w)
+    doc.recompute()
+    return 
+
+def makeframe(p0,p1,p2, inset, thickness, width):
+    polygon0 = Part.makePolygon([p0, p1, p2, p0])
+    inset0 = polygon0.makeOffset2D(-inset)
+    inset1 = polygon0.makeOffset2D(-inset-width)
+    frameface = Part.Face([inset0, inset1],"Part::FaceMakerBullseye")
+    add_to_doc(frameface)
+    dir_v0 = p1 -p0
+    dir_v1 = p1 -p2
+    dir = dir_v1.cross(dir_v0)
+    dir.normalize()
+    return frameface.extrude(dir*thickness )
+
+def makeglass(p0,p1,p2, thickness, frame_inset, frame_width ):
+    polygon = Part.makePolygon([p0, p1, p2, p0])
+    inset = polygon.makeOffset2D(-frame_inset-frame_width)
+    frameface = Part.Face(inset,"Part::FaceMakerBullseye")
+    dir_v0 = p1 -p0
+    dir_v1 = p1 -p2
+    dir = dir_v1.cross(dir_v0)
+    dir.normalize()
+    return frameface.extrude(dir*thickness )
+
+for ucount in range(1,unum+1):
+    u = u0 + ucount * ustep
+    # print(u)
+    uprev = u0 + (ucount - 1) * ustep
+    #Part.show( face.Surface.uIso(u).toShape() )
+
+    for vcount in range (1,vnum+1):
+        v = v0 + vcount * vstep
+        vprev = v0 + (vcount - 1) * vstep
+        
+        n0 = face.normalAt(u,v).normalize()
+        n1 = face.normalAt(uprev,v).normalize()
+        n2 = face.normalAt(u,vprev).normalize()
+        n3 = face.normalAt(uprev,vprev).normalize()
+        
+        p0 = face.valueAt(u,v)
+        p1 = face.valueAt( uprev, v)
+        p2 = face.valueAt( u, vprev)
+        p3 = face.valueAt( uprev, vprev)
+                
+        e0 = Part.makeLine( p0, p0 + (n0 * height) )
+        e1 = Part.makeLine( p1, p1 + (n1 * height) )
+        e2 = Part.makeLine( p2, p2 + (n2 * height) )
+        e3 = Part.makeLine( p3, p3 + (n3 * height) )
+
+        fp0     = p0 + (n0 * offset)    
+        fp1     = p1 + (n1 * offset)    
+        fp2     = p2 + (n2 * offset)    
+        fp3     = p3 + (n3 * offset)    
+
+        gp0     = p0 + (n0 * (offset + glass_offset))   
+        gp1     = p1 + (n1 * (offset + glass_offset))   
+        gp2     = p2 + (n2 * (offset + glass_offset))   
+        gp3     = p3 + (n3 * (offset + glass_offset))   
+
+        make_window(fp0, fp1, fp3, frame_inset, frame_thickness, frame_width )
+        make_window(fp0, fp3, fp2, frame_inset, frame_thickness, frame_width )
+        # frames.append(makeframe(fp0, fp1, fp3, frame_inset, frame_thickness, frame_width )) # inset,
+        # frames.append(makeframe(fp0, fp3, fp2, frame_inset, frame_thickness, frame_width)) # inset,
+        # glass.append(makeglass(gp0,gp1,gp3, glass_thickness, frame_inset, frame_width ))
+        # glass.append(makeglass(gp0,gp3,gp2, glass_thickness, frame_inset, frame_width ))
+        
+        # l =  Part.makeLoft( [e0,e1] )                   
+        # cmp.append( l )
+        # l =  Part.makeLoft( [e0,e3] )                   
+        # cmp.append( l )
+        # l =  Part.makeLoft( [e1,e3] )                   
+        # cmp.append( l )
+        
+        # if vcount == 1:
+        #     l =  Part.makeLoft( [e2,e3] )                   
+        #     cmp.append( l )
+        # if ucount == unum:
+        #     l =  Part.makeLoft( [e0,e2] )                   
+        #     cmp.append( l )
+                
+                
+# for shp in cmp:
+#    add_to_doc(shp,"cmp")
+# for shp in glass:
+#     add_to_doc(shp,"glass")
+# for shp in frames:
+#     add_to_doc(shp,"frames")
+
+# add_to_doc(Part.Compound(cmp), "structure" )
+# add_to_doc(Part.Compound(glass), "glass", transparency=80, color=(0.0, 170/255, 1.0))
+# add_to_doc(Part.Compound(frames), "frames", color=(0.1, 0.1, 0.1) )
+
+
+doc.recompute()
