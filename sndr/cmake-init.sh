@@ -21,5 +21,5 @@ cmake \
 -DPYTHON_INCLUDE_DIRS=${PY_INC} \
 ${ROOT_DIR}
 
-# cmake --build . -j ${NUM_BUILD_PROCS}
+cmake --build . -j 2 -t install
 popd
