@@ -257,11 +257,11 @@ if (BUILD_QT5)
   if (FREECAD_USE_QTOPENGL_WIDGET)
       set(HAVE_QT5_OPENGL 1)
   endif()
-  set(FREECAD_USE_QTWEBMODULE "Automatic"  CACHE STRING  "Qt Webkit or Qt WebEngine")
+  set(FREECAD_USE_QTWEBMODULE "Automatic"  CACHE STRING  "Qt_Webkit or Qt_WebEngine")
   set_property(CACHE FREECAD_USE_QTWEBMODULE PROPERTY STRINGS
                "Automatic"
-               "Qt Webkit"
-               "Qt WebEngine"
+               "Qt_Webkit"
+               "Qt_WebEngine"
   )
 endif()
 configure_file(${CMAKE_SOURCE_DIR}/src/QtOpenGL.h.cmake ${CMAKE_BINARY_DIR}/src/QtOpenGL.h)
@@ -867,7 +867,7 @@ if(NOT FREECAD_LIBPACK_USE OR FREECAD_LIBPACK_CHECKFILE_CLBUNDLER)
 
         if(NOT QT_QTWEBKIT_FOUND)
             message("========================================================\n"
-                    "Qt Webkit not found, will not build browser integration.\n"
+                    "Qt_Webkit not found, will not build browser integration.\n"
                     "========================================================\n")
         endif(NOT QT_QTWEBKIT_FOUND)
 
@@ -909,9 +909,9 @@ if(NOT FREECAD_LIBPACK_USE OR FREECAD_LIBPACK_CHECKFILE_CLBUNDLER)
             find_package(Qt5UiTools REQUIRED)
             find_package(Qt5Concurrent REQUIRED)
             if (BUILD_WEB)
-                if (${FREECAD_USE_QTWEBMODULE} MATCHES "Qt Webkit")
+                if (${FREECAD_USE_QTWEBMODULE} MATCHES "Qt_Webkit")
                     find_package(Qt5WebKitWidgets REQUIRED)
-                elseif(${FREECAD_USE_QTWEBMODULE} MATCHES "Qt WebEngine")
+                elseif(${FREECAD_USE_QTWEBMODULE} MATCHES "Qt_WebEngine")
                     find_package(Qt5WebEngineWidgets REQUIRED)
                     if (Qt5WebEngineWidgets_VERSION VERSION_LESS 5.7.0)
                         message(FATAL_ERROR "** Minimum supported Qt5WebEngine version is 5.7.0!\n")
