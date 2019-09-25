@@ -239,7 +239,7 @@ class Draft_SelectPlane:
             elif sel.HasSubObjects:
                 if len(sel.SubElementNames) == 1:
                     if "Face" in sel.SubElementNames[0]:
-                        FreeCAD.DraftWorkingPlane.alignToFace(sel.SubObjects[0], self.taskd.form.fieldOffset.Value)
+                        FreeCAD.DraftWorkingPlane.alignToFace(sel.SubObjects[0], 0)
                         self.display(FreeCAD.DraftWorkingPlane.axis)
                         return True
                     elif sel.SubElementNames[0] == "Plane":
@@ -253,13 +253,13 @@ class Draft_SelectPlane:
                         FreeCAD.DraftWorkingPlane.alignTo3Points(sel.SubObjects[0].Point,
                                                                  sel.SubObjects[1].Point,
                                                                  sel.SubObjects[2].Point,
-                                                                 self.taskd.form.fieldOffset.Value)
+                                                                 0)
                         self.display(FreeCAD.DraftWorkingPlane.axis)
                         return True
             elif sel.Object.isDerivedFrom("Part::Feature"):
                 if sel.Object.Shape:
                     if len(sel.Object.Shape.Faces) == 1:
-                        FreeCAD.DraftWorkingPlane.alignToFace(sel.Object.Shape.Faces[0], self.taskd.form.fieldOffset.Value)
+                        FreeCAD.DraftWorkingPlane.alignToFace(sel.Object.Shape.Faces[0], 0)
                         self.display(FreeCAD.DraftWorkingPlane.axis)
                         return True
         elif sel:
@@ -273,7 +273,7 @@ class Draft_SelectPlane:
                 FreeCAD.DraftWorkingPlane.alignTo3Points(subs[0].Point,
                                                          subs[1].Point,
                                                          subs[2].Point,
-                                                         self.taskd.form.fieldOffset.Value)
+                                                         0)
                 self.display(FreeCAD.DraftWorkingPlane.axis)
                 return True
         return False
