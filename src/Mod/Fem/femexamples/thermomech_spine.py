@@ -35,16 +35,17 @@ def init_doc(doc=None):
     return doc
 
 
-def setup_cantileverbase(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever base model
+def setup(doc=None, solver="ccxtools"):
+    # setup model
 
     if doc is None:
         doc = init_doc()
 
     # part
     box_obj = doc.addObject("Part::Box", "Box")
-    box_obj.Height = box_obj.Width = 1000
-    box_obj.Length = 8000
+    box_obj.Height = 25.4
+    box_obj.Width = 25.4
+    box_obj.Length = 203.2
     doc.recompute()
 
     if FreeCAD.GuiUp:
@@ -66,37 +67,65 @@ def setup_cantileverbase(doc=None, solver="ccxtools"):
             ObjectsFem.makeSolverCalculixCcxTools(doc, "CalculiXccxTools")
         )[0]
         solver_object.WorkingDir = u""
-    elif solver == "elmer":
-        analysis.addObject(ObjectsFem.makeSolverElmer(doc, "SolverElmer"))
-    elif solver == "z88":
-        analysis.addObject(ObjectsFem.makeSolverZ88(doc, "SolverZ88"))
+    # should be possible with elmer too
+    # elif solver == "elmer":
+    #     analysis.addObject(ObjectsFem.makeSolverElmer(doc, "SolverElmer"))
     if solver == "calculix" or solver == "ccxtools":
-        solver_object.AnalysisType = "static"
+        solver_object.AnalysisType = "thermomech"
         solver_object.GeometricalNonlinearity = "linear"
-        solver_object.ThermoMechSteadyState = False
+        solver_object.ThermoMechSteadyState = True
         solver_object.MatrixSolverType = "default"
-        solver_object.IterationsControlParameterTimeUse = False
+        solver_object.IterationsThermoMechMaximum = 2000
+        solver_object.IterationsControlParameterTimeUse = True
 
     # material
     material_object = analysis.addObject(
-        ObjectsFem.makeMaterialSolid(doc, "FemMaterial")
+        ObjectsFem.makeMaterialSolid(doc, "MechanicalMaterial")
     )[0]
     mat = material_object.Material
-    mat["Name"] = "CalculiX-Steel"
-    mat["YoungsModulus"] = "210000 MPa"
+    mat["Name"] = "Steel-Generic"
+    mat["YoungsModulus"] = "200000 MPa"
     mat["PoissonRatio"] = "0.30"
     mat["Density"] = "7900 kg/m^3"
-    mat["ThermalExpansionCoefficient"] = "0.012 mm/m/K"
+    mat["ThermalConductivity"] = "43.27 W/m/K"  # SvdW: Change to Ansys model values
+    mat["ThermalExpansionCoefficient"] = "12 um/m/K"
+    mat["SpecificHeat"] = "500 J/kg/K"  # SvdW: Change to Ansys model values
     material_object.Material = mat
 
     # fixed_constraint
     fixed_constraint = analysis.addObject(
-        ObjectsFem.makeConstraintFixed(doc, name="ConstraintFixed")
+        ObjectsFem.makeConstraintFixed(doc, "FemConstraintFixed")
     )[0]
-    fixed_constraint.References = [(doc.Box, "Face1")]
+    fixed_constraint.References = [(box_obj, "Face1")]
+
+    # initialtemperature_constraint
+    initialtemperature_constraint = analysis.addObject(
+        ObjectsFem.makeConstraintInitialTemperature(doc, "FemConstraintInitialTemperature")
+    )[0]
+    initialtemperature_constraint.initialTemperature = 300.0
+
+    # temperature_constraint
+    temperature_constraint = analysis.addObject(
+        ObjectsFem.makeConstraintTemperature(doc, "FemConstraintTemperature")
+    )[0]
+    temperature_constraint.References = [(box_obj, "Face1")]
+    temperature_constraint.Temperature = 310.93
+
+    # heatflux_constraint
+    heatflux_constraint = analysis.addObject(
+        ObjectsFem.makeConstraintHeatflux(doc, "FemConstraintHeatflux")
+    )[0]
+    heatflux_constraint.References = [
+        (box_obj, "Face3"),
+        (box_obj, "Face4"),
+        (box_obj, "Face5"),
+        (box_obj, "Face6")
+    ]
+    heatflux_constraint.AmbientTemp = 255.3722
+    heatflux_constraint.FilmCoef = 5.678
 
     # mesh
-    from .meshes.mesh_canticcx_tetra10 import create_nodes, create_elements
+    from .meshes.mesh_thermomech_spine import create_nodes, create_elements
     fem_mesh = Fem.FemMesh()
     control = create_nodes(fem_mesh)
     if not control:
@@ -113,73 +142,8 @@ def setup_cantileverbase(doc=None, solver="ccxtools"):
     return doc
 
 
-def setup_cantileverfaceload(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever, apply 9 MN on surface of front end face
-
-    doc = setup_cantileverbase(doc, solver)
-
-    # force_constraint
-    force_constraint = doc.Analysis.addObject(
-        ObjectsFem.makeConstraintForce(doc, name="ConstraintForce")
-    )[0]
-    force_constraint.References = [(doc.Box, "Face2")]
-    force_constraint.Force = 9000000.0
-    force_constraint.Direction = (doc.Box, ["Edge5"])
-    force_constraint.Reversed = True
-
-    doc.recompute()
-    return doc
-
-
-def setup_cantilevernodeload(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever, apply 9 MN on the 4 nodes of the front end face
-
-    doc = setup_cantileverbase(doc, solver)
-
-    # force_constraint
-    force_constraint = doc.Analysis.addObject(
-        ObjectsFem.makeConstraintForce(doc, name="ConstraintForce")
-    )[0]
-    # should be possible in one tuple too
-    force_constraint.References = [
-        (doc.Box, "Vertex5"),
-        (doc.Box, "Vertex6"),
-        (doc.Box, "Vertex7"),
-        (doc.Box, "Vertex8")
-    ]
-    force_constraint.Force = 9000000.0
-    force_constraint.Direction = (doc.Box, ["Edge5"])
-    force_constraint.Reversed = True
-
-    doc.recompute()
-    return doc
-
-
-def setup_cantileverprescribeddisplacement(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever
-    # apply a prescribed displacement of 250 mm in -z on the front end face
-
-    doc = setup_cantileverbase(doc, solver)
-
-    # displacement_constraint
-    displacement_constraint = doc.Analysis.addObject(
-        ObjectsFem.makeConstraintDisplacement(doc, name="ConstraintDisplacmentPrescribed")
-    )[0]
-    displacement_constraint.References = [(doc.Box, "Face2")]
-    displacement_constraint.zFix = False
-    displacement_constraint.zFree = False
-    displacement_constraint.zDisplacement = -250.0
-
-    doc.recompute()
-    return doc
-
-
 """
-from femexamples import ccx_cantilever_std as canti
-
-canti.setup_cantileverbase()
-canti.setup_cantileverfaceload()
-canti.setup_cantilevernodeload()
-canti.setup_cantileverprescribeddisplacement()
+from femexamples import thermomech_spine as spine
+spine.setup()
 
 """

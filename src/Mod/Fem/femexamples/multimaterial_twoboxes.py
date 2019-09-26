@@ -35,16 +35,39 @@ def init_doc(doc=None):
     return doc
 
 
-def setup_cantileverbase(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever base model
+def setup(doc=None, solver="ccxtools"):
+    # setup model
 
     if doc is None:
         doc = init_doc()
 
     # part
-    box_obj = doc.addObject("Part::Box", "Box")
-    box_obj.Height = box_obj.Width = 1000
-    box_obj.Length = 8000
+    # create a CompSolid of two Boxes extract the CompSolid
+    # we are able to remesh if needed
+    boxlow = doc.addObject("Part::Box", "BoxLower")
+    boxupp = doc.addObject("Part::Box", "BoxUpper")
+    boxupp.Placement.Base = (0, 0, 10)
+
+    # for BooleanFragments Occt >=6.9 is needed
+    """
+    import BOPTools.SplitFeatures
+    bf = BOPTools.SplitFeatures.makeBooleanFragments(name="BooleanFragments")
+    bf.Objects = [boxlow, boxupp]
+    bf.Mode = "CompSolid"
+    self.active_doc.recompute()
+    bf.Proxy.execute(bf)
+    bf.purgeTouched()
+    for obj in bf.ViewObject.Proxy.claimChildren():
+        obj.ViewObject.hide()
+    self.active_doc.recompute()
+    import CompoundTools.CompoundFilter
+    cf = CompoundTools.CompoundFilter.makeCompoundFilter(name="MultiMatCompSolid")
+    cf.Base = bf
+    cf.FilterType = "window-volume"
+    cf.Proxy.execute(cf)
+    cf.purgeTouched()
+    cf.Base.ViewObject.hide()
+    """
     doc.recompute()
 
     if FreeCAD.GuiUp:
@@ -66,10 +89,6 @@ def setup_cantileverbase(doc=None, solver="ccxtools"):
             ObjectsFem.makeSolverCalculixCcxTools(doc, "CalculiXccxTools")
         )[0]
         solver_object.WorkingDir = u""
-    elif solver == "elmer":
-        analysis.addObject(ObjectsFem.makeSolverElmer(doc, "SolverElmer"))
-    elif solver == "z88":
-        analysis.addObject(ObjectsFem.makeSolverZ88(doc, "SolverZ88"))
     if solver == "calculix" or solver == "ccxtools":
         solver_object.AnalysisType = "static"
         solver_object.GeometricalNonlinearity = "linear"
@@ -78,25 +97,49 @@ def setup_cantileverbase(doc=None, solver="ccxtools"):
         solver_object.IterationsControlParameterTimeUse = False
 
     # material
-    material_object = analysis.addObject(
-        ObjectsFem.makeMaterialSolid(doc, "FemMaterial")
+    material_object_low = analysis.addObject(
+        ObjectsFem.makeMaterialSolid(doc, "MechanicalMaterialLow")
     )[0]
-    mat = material_object.Material
-    mat["Name"] = "CalculiX-Steel"
-    mat["YoungsModulus"] = "210000 MPa"
+    mat = material_object_low.Material
+    mat["Name"] = "Aluminium-Generic"
+    mat["YoungsModulus"] = "70000 MPa"
+    mat["PoissonRatio"] = "0.35"
+    mat["Density"] = "2700  kg/m^3"
+    material_object_low.Material = mat
+    material_object_low.References = [(boxlow, "Solid1")]
+    analysis.addObject(material_object_low)
+
+    material_object_upp = analysis.addObject(
+        ObjectsFem.makeMaterialSolid(doc, "MechanicalMaterialUpp")
+    )[0]
+    mat = material_object_upp.Material
+    mat["Name"] = "Steel-Generic"
+    mat["YoungsModulus"] = "200000 MPa"
     mat["PoissonRatio"] = "0.30"
-    mat["Density"] = "7900 kg/m^3"
-    mat["ThermalExpansionCoefficient"] = "0.012 mm/m/K"
-    material_object.Material = mat
+    mat["Density"] = "7980 kg/m^3"
+    material_object_upp.Material = mat
+    material_object_upp.References = [(boxupp, "Solid1")]
 
     # fixed_constraint
     fixed_constraint = analysis.addObject(
-        ObjectsFem.makeConstraintFixed(doc, name="ConstraintFixed")
+        ObjectsFem.makeConstraintFixed(doc, "ConstraintFixed")
     )[0]
-    fixed_constraint.References = [(doc.Box, "Face1")]
+    # fixed_constraint.References = [(cf, "Face3")]
+    fixed_constraint.References = [(boxlow, "Face5")]
+
+    # pressure_constraint
+    pressure_constraint = analysis.addObject(
+        ObjectsFem.makeConstraintPressure(doc, "ConstraintPressure")
+    )[0]
+    # pressure_constraint.References = [(cf, "Face3")]
+    pressure_constraint.References = [(boxlow, "Face5")]
+    # pressure_constraint.References = [(cf, "Face9")]
+    pressure_constraint.References = [(boxupp, "Face6")]
+    pressure_constraint.Pressure = 1000.0
+    pressure_constraint.Reversed = False
 
     # mesh
-    from .meshes.mesh_canticcx_tetra10 import create_nodes, create_elements
+    from .meshes.mesh_multimaterial_twoboxes import create_nodes, create_elements
     fem_mesh = Fem.FemMesh()
     control = create_nodes(fem_mesh)
     if not control:
@@ -113,73 +156,8 @@ def setup_cantileverbase(doc=None, solver="ccxtools"):
     return doc
 
 
-def setup_cantileverfaceload(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever, apply 9 MN on surface of front end face
-
-    doc = setup_cantileverbase(doc, solver)
-
-    # force_constraint
-    force_constraint = doc.Analysis.addObject(
-        ObjectsFem.makeConstraintForce(doc, name="ConstraintForce")
-    )[0]
-    force_constraint.References = [(doc.Box, "Face2")]
-    force_constraint.Force = 9000000.0
-    force_constraint.Direction = (doc.Box, ["Edge5"])
-    force_constraint.Reversed = True
-
-    doc.recompute()
-    return doc
-
-
-def setup_cantilevernodeload(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever, apply 9 MN on the 4 nodes of the front end face
-
-    doc = setup_cantileverbase(doc, solver)
-
-    # force_constraint
-    force_constraint = doc.Analysis.addObject(
-        ObjectsFem.makeConstraintForce(doc, name="ConstraintForce")
-    )[0]
-    # should be possible in one tuple too
-    force_constraint.References = [
-        (doc.Box, "Vertex5"),
-        (doc.Box, "Vertex6"),
-        (doc.Box, "Vertex7"),
-        (doc.Box, "Vertex8")
-    ]
-    force_constraint.Force = 9000000.0
-    force_constraint.Direction = (doc.Box, ["Edge5"])
-    force_constraint.Reversed = True
-
-    doc.recompute()
-    return doc
-
-
-def setup_cantileverprescribeddisplacement(doc=None, solver="ccxtools"):
-    # setup CalculiX cantilever
-    # apply a prescribed displacement of 250 mm in -z on the front end face
-
-    doc = setup_cantileverbase(doc, solver)
-
-    # displacement_constraint
-    displacement_constraint = doc.Analysis.addObject(
-        ObjectsFem.makeConstraintDisplacement(doc, name="ConstraintDisplacmentPrescribed")
-    )[0]
-    displacement_constraint.References = [(doc.Box, "Face2")]
-    displacement_constraint.zFix = False
-    displacement_constraint.zFree = False
-    displacement_constraint.zDisplacement = -250.0
-
-    doc.recompute()
-    return doc
-
-
 """
-from femexamples import ccx_cantilever_std as canti
-
-canti.setup_cantileverbase()
-canti.setup_cantileverfaceload()
-canti.setup_cantilevernodeload()
-canti.setup_cantileverprescribeddisplacement()
+from femexamples import multimaterial_twoboxes as twoboxes
+twoboxes.setup()
 
 """
