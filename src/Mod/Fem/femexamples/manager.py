@@ -73,13 +73,34 @@ def run_analysis(doc, base_name, filepath=""):
     doc.save()
 
 
-def run_all():
-    run_ccx_cantileverfaceload()
-    run_ccx_cantilevernodeload()
-    run_ccx_cantileverprescribeddisplacement()
-    run_rcwall2d()
-    run_thermomech_flow1d()
-    run_thermomech_spine()
+def run_boxanalysisstatic(solver=None, base_name=None):
+
+    from .boxanalysis import setup_static as setup
+    doc = setup()
+
+    if base_name is None:
+        base_name = "Box_Static_Analysis"
+        if solver is not None:
+            base_name += "_" + solver
+    run_analysis(doc, base_name)
+    doc.recompute()
+
+    return doc
+
+
+def run_boxanalysisfrequency(solver=None, base_name=None):
+
+    from .boxanalysis import setup_frequency as setup
+    doc = setup()
+
+    if base_name is None:
+        base_name = "Box_Frequency_Analysis"
+        if solver is not None:
+            base_name += "_" + solver
+    run_analysis(doc, base_name)
+    doc.recompute()
+
+    return doc
 
 
 def run_ccx_cantileverfaceload(solver=None, base_name=None):
@@ -92,6 +113,7 @@ def run_ccx_cantileverfaceload(solver=None, base_name=None):
         if solver is not None:
             base_name += "_" + solver
     run_analysis(doc, base_name)
+    doc.recompute()
 
     return doc
 
@@ -106,6 +128,7 @@ def run_ccx_cantilevernodeload(solver=None, base_name=None):
         if solver is not None:
             base_name += "_" + solver
     run_analysis(doc, base_name)
+    doc.recompute()
 
     return doc
 
@@ -120,13 +143,14 @@ def run_ccx_cantileverprescribeddisplacement(solver=None, base_name=None):
         if solver is not None:
             base_name += "_" + solver
     run_analysis(doc, base_name)
+    doc.recompute()
 
     return doc
 
 
-def run_multimaterial_twoboxes(solver=None, base_name=None):
+def run_material_multiple_twoboxes(solver=None, base_name=None):
 
-    from .multimaterial_twoboxes import setup
+    from .material_multiple_twoboxes import setup
     doc = setup()
 
     if base_name is None:
@@ -134,13 +158,29 @@ def run_multimaterial_twoboxes(solver=None, base_name=None):
         if solver is not None:
             base_name += "_" + solver
     run_analysis(doc, base_name)
+    doc.recompute()
+
+    return doc
+
+
+def run_material_nl_platewithhole(solver=None, base_name=None):
+
+    from .material_nl_platewithhole import setup
+    doc = setup()
+
+    if base_name is None:
+        base_name = "Nonlinear_material_plate_with_hole"
+        if solver is not None:
+            base_name += "_" + solver
+    run_analysis(doc, base_name)
+    doc.recompute()
 
     return doc
 
 
 def run_rcwall2d(solver=None, base_name=None):
 
-    from .rc_wall_2d import setup_rcwall2d as setup
+    from .rc_wall_2d import setup as setup
     doc = setup()
 
     if base_name is None:
@@ -148,6 +188,7 @@ def run_rcwall2d(solver=None, base_name=None):
         if solver is not None:
             base_name += "_" + solver
     run_analysis(doc, base_name)
+    doc.recompute()
 
     return doc
 
@@ -162,6 +203,7 @@ def run_thermomech_flow1d(solver=None, base_name=None):
         if solver is not None:
             base_name += "_" + solver
     run_analysis(doc, base_name)
+    doc.recompute()
 
     return doc
 
@@ -176,28 +218,44 @@ def run_thermomech_spine(solver=None, base_name=None):
         if solver is not None:
             base_name += "_" + solver
     run_analysis(doc, base_name)
+    doc.recompute()
 
     return doc
 
 
+def run_all():
+    run_boxanalysisstatic()
+    run_boxanalysisfrequency()
+    run_ccx_cantileverfaceload()
+    run_ccx_cantilevernodeload()
+    run_ccx_cantileverprescribeddisplacement()
+    run_material_nl_platewithhole()
+    run_material_multiple_twoboxes()
+    run_rcwall2d()
+    run_thermomech_flow1d()
+    run_thermomech_spine()
+
+
 """
 from femexamples.manager import *
-
 run_all()
 
+from femexamples.manager import *
+doc = run_boxanalysisstatic()
+doc = run_boxanalysisfrequency()
 doc = run_ccx_cantileverfaceload()
 doc = run_ccx_cantilevernodeload()
 doc = run_ccx_cantileverprescribeddisplacement()
+doc = run_material_nl_platewithhole()
+doc = run_material_multiple_twoboxes()
+doc = run_rcwall2d()
+doc = run_thermomech_flow1d()
+doc = run_thermomech_spine()
+
 
 doc = run_ccx_cantilevernodeload("calculix")
 doc = run_ccx_cantilevernodeload("ccxtools")
 doc = run_ccx_cantilevernodeload("z88")
 
-doc = run_multimaterial_twoboxes()
-
-doc = run_rcwall2d()
-
-doc = run_thermomech_flow1d()
-doc = run_thermomech_spine()
 
 """

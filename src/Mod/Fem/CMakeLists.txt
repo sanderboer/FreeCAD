@@ -35,9 +35,11 @@ SET(FemCommands_SRCS
 
 SET(FemExamples_SRCS
     femexamples/__init__.py
+    femexamples/boxanalysis.py
     femexamples/ccx_cantilever_std.py
     femexamples/manager.py
-    femexamples/multimaterial_twoboxes.py
+    femexamples/material_multiple_twoboxes.py
+    femexamples/material_nl_platewithhole.py
     femexamples/rc_wall_2d.py
     femexamples/thermomech_flow1d.py
     femexamples/thermomech_spine.py
@@ -45,11 +47,13 @@ SET(FemExamples_SRCS
 
 SET(FemExampleMeshes_SRCS
     femexamples/meshes/__init__.py
+    femexamples/meshes/mesh_boxanalysis_tetra10.py
+    femexamples/meshes/mesh_boxes_2_vertikal_tetra10.py
     femexamples/meshes/mesh_canticcx_tetra10.py
     femexamples/meshes/mesh_rc_wall_2d_tria6.py
-    femexamples/meshes/mesh_multimaterial_twoboxes.py
-    femexamples/meshes/mesh_thermomech_flow1d.py
-    femexamples/meshes/mesh_thermomech_spine.py
+    femexamples/meshes/mesh_platewithhole_tetra10.py
+    femexamples/meshes/mesh_thermomech_flow1d_seg3.py
+    femexamples/meshes/mesh_thermomech_spine_tetra10.py
 )
 
 SET(FemInOut_SRCS
@@ -157,7 +161,6 @@ SET(FemTestsFiles_SRCS
 
 SET(FemTestsCcx_SRCS
     femtest/data/ccx/__init__.py
-    femtest/data/ccx/cube_mesh.py
     femtest/data/ccx/cube_frequency.inp
     femtest/data/ccx/cube_frequency.dat
     femtest/data/ccx/cube_frequency.frd
