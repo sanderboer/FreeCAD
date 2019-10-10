@@ -14,7 +14,7 @@ cmake \
 -DFREECAD_USE_OCC_VARIANT=Official_Version \
 -DMpidotH=/usr/include/mpi.h \
 -DMEDFILE_INCLUDE_DIRS=/usr/include/med \
--DFREECAD_USE_QTWEBMODULE="Qt_Webkit" \
+-DFREECAD_USE_QTWEBMODULE="Qt WebEngine" \
 -DPYTHON_EXECUTABLE=${PY_EXE} \
 -DPYTHON_LIBRARIES=${PY_LIB} \
 -DPYTHON_LIBPATH=${PY_LIB_PATH} \

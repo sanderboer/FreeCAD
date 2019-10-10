@@ -51,6 +51,8 @@ makedepends+=" qt5-svg-devel"
 makedepends+=" qt5-tools-devel"
 makedepends+=" qt5-webkit-devel"
 makedepends+=" qt5-webengine-devel"
+
+makedepends+=" qt5-webchannel-devel"
 makedepends+=" qt5-x11extras-devel"
 makedepends+=" qt5-xmlpatterns-devel"
 makedepends+=" coin3-doc"
