@@ -28,6 +28,8 @@
 
 #include <openssl/hmac.h>
 #include <openssl/pem.h>
+#include <openssl/md5.h>
+
 #include <curl/curl.h>
 
 #include <App/Application.h>
@@ -193,31 +195,15 @@ void Cloud::CloudWriter::checkText(DOMText* text) {
 
 void Cloud::CloudWriter::createBucket()
 {
-	printf("CREATING BUCKET %s\n", this->Bucket);
-        struct timeval tv;
-        struct tm *tm;
-        char date_formatted[256];
-        char StringToSign[1024];
-        unsigned char *digest;
-
+        struct Cloud::AmzData *RequestData;
         CURL *curl;
         CURLcode res;
 
         struct data_buffer curl_buffer;
 
-#if defined(FC_OS_WIN32)
-#else
-        gettimeofday(&tv,NULL);
-        tm = localtime(&tv.tv_sec);
-        strftime(date_formatted,256,"%a, %d %b %Y %T %z", tm);
-#endif
-
-        // CHANGEME
-        sprintf(StringToSign,"PUT\n\napplication/xml\n%s\n/%s/", date_formatted, this->Bucket);
-
-        // We have to use HMAC encoding and SHA1
-        digest=HMAC(EVP_sha1(),this->SecretKey,strlen(this->SecretKey),
-                (const unsigned char *)&StringToSign,strlen(StringToSign),NULL,NULL);
+	char path[1024];
+        sprintf(path, "/%s/", this->Bucket);
+        RequestData = Cloud::ComputeDigestAmzS3v2("PUT", "application/xml", path, this->SecretKey, NULL, 0);
 
         // Let's build the Header and call to curl
         curl_global_init(CURL_GLOBAL_ALL);
@@ -225,27 +211,23 @@ void Cloud::CloudWriter::createBucket()
         if ( curl )
         {
                 struct curl_slist *chunk = NULL;
-                char header_data[1024];
+		char Url[256];
                 // Let's build our own header
                 std::string strUrl(this->Url);
                 eraseSubStr(strUrl,"http://");
                 eraseSubStr(strUrl,"https://");
 
-                sprintf(header_data,"Host: %s", strUrl.c_str());
-                chunk = curl_slist_append(chunk, header_data);
-                sprintf(header_data,"Date: %s", date_formatted);
-                chunk = curl_slist_append(chunk, header_data);
-                chunk = curl_slist_append(chunk, "Content-Type: application/xml");
-                std::string digest_str;
-                digest_str=Base::base64_encode(digest,strlen((const char *)digest));
-                sprintf(header_data,"Authorization: AWS %s:%s", this->AccessKey,
-                digest_str.c_str());
-                chunk = curl_slist_append(chunk, header_data);
+                chunk = Cloud::BuildHeaderAmzS3v2( strUrl.c_str(), this->TcpPort, this->AccessKey, RequestData);
+		delete RequestData;
+
                 curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-//                curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-                sprintf(header_data,"%s:%s/%s/", this->Url,this->TcpPort,
+
+                // Lets build the Url for our Curl call
+
+                sprintf(Url,"%s:%s/%s/", this->Url,this->TcpPort,
                                                     this->Bucket);
-                curl_easy_setopt(curl, CURLOPT_URL, header_data);
+                curl_easy_setopt(curl, CURLOPT_URL, Url);
+
                 curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
                 curl_easy_setopt(curl, CURLOPT_PUT, 1L);
                 // curl read a file not a memory buffer (it shall be able to do it)
@@ -266,13 +248,108 @@ void Cloud::CloudWriter::createBucket()
         }
 }
 
-Cloud::CloudWriter::CloudWriter(const char* Url, const char* AccessKey, const char* SecretKey, const char* TcpPort, const char* Bucket)
+struct Cloud::AmzData *Cloud::ComputeDigestAmzS3v2(char *operation, char *data_type, const char *target, const char *Secret, const char *ptr, long size)
 {
+	struct AmzData *returnData;
         struct timeval tv;
         struct tm *tm;
         char date_formatted[256];
-        char StringToSign[1024];
-        unsigned char *digest;
+	char StringToSign[1024];
+	unsigned char *digest;
+	unsigned int HMACLength;
+        // Amazon S3 and Swift require the timezone to be define to GMT.
+        // As to simplify the conversion this is performed through the TZ
+        // environment variable and a call to localtime as to convert output of gettimeofday
+	returnData = new Cloud::AmzData;
+	strcpy(returnData->ContentType, data_type);
+	
+#if defined(FC_OS_WIN32)
+        _putenv("TZ=GMT");
+#else
+        setenv("TZ","GMT",1);
+#endif
+#if defined(FC_OS_WIN32)
+#else
+        gettimeofday(&tv,NULL);
+        tm = localtime(&tv.tv_sec);
+        strftime(date_formatted,256,"%a, %d %b %Y %T %z", tm);
+#endif
+	returnData->MD5=NULL;
+	if ( strcmp(operation,"PUT") == 0 )
+	{
+		if (  ptr != NULL )
+		{
+	                returnData->MD5=Cloud::MD5Sum(ptr,size);
+			sprintf(StringToSign,"%s\n%s\n%s\n%s\n%s", operation, returnData->MD5, data_type, date_formatted, target);
+		}
+		else
+			sprintf(StringToSign,"%s\n\n%s\n%s\n%s", operation, data_type, date_formatted, target);
+	}
+	else
+		sprintf(StringToSign,"%s\n\n%s\n%s\n%s", operation, data_type, date_formatted, target);
+	// We have to use HMAC encoding and SHA1
+        digest=HMAC(EVP_sha1(),Secret,strlen(Secret),
+                (const unsigned char *)&StringToSign,strlen(StringToSign),NULL,&HMACLength);
+	returnData->digest = Base::base64_encode(digest,HMACLength);
+	strcpy(returnData->dateFormatted,date_formatted);
+	return returnData;
+	
+}
+
+char *Cloud::MD5Sum(const char *ptr, long size)
+{
+	char *output;
+	std::string local;
+	unsigned char result[MD5_DIGEST_LENGTH];
+	output=(char *)malloc(2*MD5_DIGEST_LENGTH*sizeof(char)+1);
+        MD5((unsigned char*) ptr, size, result);
+	local= Base::base64_encode(result,MD5_DIGEST_LENGTH);
+	strcpy(output,local.c_str());
+	return(output);
+}
+
+struct curl_slist *Cloud::BuildHeaderAmzS3v2(const char *Url, const char *TcpPort, const char *PublicKey, struct Cloud::AmzData *Data)
+{
+        char header_data[1024];
+	struct curl_slist *chunk = NULL;
+
+	// Build the Host: entry
+
+	sprintf(header_data,"Host: %s:%s", Url, TcpPort);
+        chunk = curl_slist_append(chunk, header_data);
+	
+	// Build the Date entry
+
+	sprintf(header_data,"Date: %s", Data->dateFormatted);
+	chunk = curl_slist_append(chunk, header_data);
+	
+	// Build the Content-Type entry
+
+	sprintf(header_data,"Content-Type:%s", Data->ContentType);
+	chunk = curl_slist_append(chunk, header_data);
+
+	// If ptr is not null we must compute the MD5-Sum as to validate later the ETag
+	// and add the MD5-Content: entry to the header
+	if ( Data->MD5 != NULL )
+	{
+		sprintf(header_data,"Content-MD5: %s", Data->MD5);
+		chunk = curl_slist_append(chunk, header_data);
+		// We don't need it anymore we can free it
+		free((void *)Data->MD5);
+	}
+
+	// build the Auth entry
+
+	sprintf(header_data,"Authorization: AWS %s:%s", PublicKey,
+                Data->digest.c_str());
+        chunk = curl_slist_append(chunk, header_data);
+
+	return chunk;
+}
+
+Cloud::CloudWriter::CloudWriter(const char* Url, const char* AccessKey, const char* SecretKey, const char* TcpPort, const char* Bucket)
+{
+        struct Cloud::AmzData *RequestData;
         CURL *curl;
         CURLcode res;
 
@@ -284,58 +361,32 @@ Cloud::CloudWriter::CloudWriter(const char* Url, const char* AccessKey, const ch
         this->TcpPort=TcpPort;
         this->Bucket=Bucket;
         this->FileName="";
-        // Amazon S3 and Swift require the timezone to be define to GMT.
-        // As to simplify the conversion this is performed through the TZ
-        // environment variable and a call to localtime as to convert output of gettimeofday
-#if defined(FC_OS_WIN32)
-        _putenv("TZ=GMT");
-#else
-        setenv("TZ","GMT",1);
-#endif
-	// We must check that the bucket exists or not. If not, we have to create it.
-	// We must request the bucketlist if we receive a 404 error. This means that it
-    // doesn't exist. The other option is that the content list is empty.
-	// This piece of code is the same as the Reader except we do not interpret it !
-#if defined(FC_OS_WIN32)
-#else
-        gettimeofday(&tv,NULL);
-        tm = localtime(&tv.tv_sec);
-        strftime(date_formatted,256,"%a, %d %b %Y %T %z", tm);
-#endif
-
-        sprintf(StringToSign,"GET\n\napplication/xml\n%s\n/%s/", date_formatted, this->Bucket);
-
-        // We have to use HMAC encoding and SHA1
-        digest=HMAC(EVP_sha1(),this->SecretKey,strlen(this->SecretKey),
-                (const unsigned char *)&StringToSign,strlen(StringToSign),NULL,NULL);
-
+	char path[1024];
+	sprintf(path,"/%s/", this->Bucket);
+	RequestData = Cloud::ComputeDigestAmzS3v2("GET", "application/xml", path, this->SecretKey, NULL, 0);
         // Let's build the Header and call to curl
         curl_global_init(CURL_GLOBAL_ALL);
         curl = curl_easy_init();
         if ( curl )
         {
-                struct curl_slist *chunk = NULL;
-                char header_data[1024];
                 // Let's build our own header
+		struct curl_slist *chunk = NULL;
+		char Url[256];
                 std::string strUrl(this->Url);
                 eraseSubStr(strUrl,"http://");
                 eraseSubStr(strUrl,"https://");
 
-                sprintf(header_data,"Host: %s:%s", strUrl.c_str(),
-                                                   this->TcpPort);
-                chunk = curl_slist_append(chunk, header_data);
-                sprintf(header_data,"Date: %s", date_formatted);
-                chunk = curl_slist_append(chunk, header_data);
-                chunk = curl_slist_append(chunk, "Content-Type: application/xml");
-                std::string digest_str;
-                digest_str=Base::base64_encode(digest,strlen((const char *)digest));
-                sprintf(header_data,"Authorization: AWS %s:%s", this->AccessKey,
-                digest_str.c_str());
-                chunk = curl_slist_append(chunk, header_data);
+		chunk = Cloud::BuildHeaderAmzS3v2( strUrl.c_str(), this->TcpPort, this->AccessKey, RequestData);
+		delete RequestData;
+
                 curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-                sprintf(header_data,"%s:%s/%s/", this->Url,this->TcpPort,
+
+		// Lets build the Url for our Curl call
+
+		sprintf(Url,"%s:%s/%s/", this->Url,this->TcpPort,
                                                     this->Bucket);
-                curl_easy_setopt(curl, CURLOPT_URL, header_data);
+                curl_easy_setopt(curl, CURLOPT_URL, Url);
+
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWrite_CallbackFunc_StdString);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
                 // curl read a file not a memory buffer (it shall be able to do it)
@@ -344,7 +395,7 @@ Cloud::CloudWriter::CloudWriter(const char* Url, const char* AccessKey, const ch
                       fprintf(stderr, "curl_easy_perform() failed: %s\n",
                         curl_easy_strerror(res));
                 curl_easy_cleanup(curl);
-
+		// Lets dump temporarily for debug purposes of s3v4 implementation
 
                 std::stringstream input(s);
 
@@ -367,7 +418,7 @@ Cloud::CloudWriter::CloudWriter(const char* Url, const char* AccessKey, const ch
                 parser->parse(myxml_buf);
                 auto* dom=parser->getDocument();
 		// Is there an Error entry into the document ?
-		// if yes then we must create the Bucket
+		// if yes, then we must create the Bucket
                 checkXML(dom);
 		if ( strcmp(errorCode,"NoSuchBucket") == 0 )
 		{
@@ -458,11 +509,7 @@ Cloud::CloudReader::~CloudReader()
 
 Cloud::CloudReader::CloudReader(const char* Url, const char* AccessKey, const char* SecretKey, const char* TcpPort, const char* Bucket) 
 {
-        struct timeval tv;
-        struct tm *tm;
-        char date_formatted[256];
-        char StringToSign[1024];
-        unsigned char *digest;
+        struct Cloud::AmzData *RequestData;
         CURL *curl;
         CURLcode res;
 
@@ -475,58 +522,33 @@ Cloud::CloudReader::CloudReader(const char* Url, const char* AccessKey, const ch
         this->TcpPort=TcpPort;
         this->Bucket=Bucket;
 
-        // Amazon S3 and Swift require the timezone to be define to
-        // GMT. As to simplify the conversion this is performed through the TZ
-        // environment variable and a call to localtime as to convert output of gettimeofday
-#if defined(FC_OS_WIN32)
-        _putenv("TZ=GMT");
-#else
-        setenv("TZ","GMT",1);
-#endif
+	char path[1024];
+        sprintf(path,"/%s/", this->Bucket);
+        RequestData = Cloud::ComputeDigestAmzS3v2("GET", "application/xml", path, this->SecretKey, NULL, 0);
 
-        // We must get the directory content
-
-
-#if defined(FC_OS_WIN32)
-#else
-        gettimeofday(&tv,NULL);
-        tm = localtime(&tv.tv_sec);
-        strftime(date_formatted,256,"%a, %d %b %Y %T %z", tm);
-#endif
-
-        sprintf(StringToSign,"GET\n\napplication/xml\n%s\n/%s/", date_formatted, this->Bucket);
-
-        // We have to use HMAC encoding and SHA1
-        digest=HMAC(EVP_sha1(),this->SecretKey,strlen(this->SecretKey),
-                (const unsigned char *)&StringToSign,strlen(StringToSign),NULL,NULL);
 
         // Let's build the Header and call to curl
         curl_global_init(CURL_GLOBAL_ALL);
         curl = curl_easy_init();
         if ( curl )
         {
+		// Let's build our own header
                 struct curl_slist *chunk = NULL;
-                char header_data[1024];
-                // Let's build our own header
-		std::string strUrl(this->Url);
+                char Url[256];
+                std::string strUrl(this->Url);
                 eraseSubStr(strUrl,"http://");
                 eraseSubStr(strUrl,"https://");
 
-                sprintf(header_data,"Host: %s:%s", strUrl.c_str(),
-                                                   this->TcpPort);
-                chunk = curl_slist_append(chunk, header_data);
-                sprintf(header_data,"Date: %s", date_formatted);
-                chunk = curl_slist_append(chunk, header_data);
-                chunk = curl_slist_append(chunk, "Content-Type: application/xml");
-                std::string digest_str;
-                digest_str=Base::base64_encode(digest,strlen((const char *)digest));
-                sprintf(header_data,"Authorization: AWS %s:%s", this->AccessKey,
-                digest_str.c_str());
-                chunk = curl_slist_append(chunk, header_data);
+                chunk = Cloud::BuildHeaderAmzS3v2( strUrl.c_str(), this->TcpPort, this->AccessKey, RequestData);
+		delete RequestData;
+
                 curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-                sprintf(header_data,"%s:%s/%s/", this->Url,this->TcpPort,
+
+                sprintf(Url,"%s:%s/%s/", this->Url,this->TcpPort,
                                                     this->Bucket);
-                curl_easy_setopt(curl, CURLOPT_URL, header_data);
+                curl_easy_setopt(curl, CURLOPT_URL, Url);
+
+
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWrite_CallbackFunc_StdString);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
                 // curl read a file not a memory buffer (it shall be able to do it)
@@ -564,31 +586,16 @@ Cloud::CloudReader::CloudReader(const char* Url, const char* AccessKey, const ch
 
 void Cloud::CloudReader::DownloadFile(Cloud::CloudReader::FileEntry *entry)
 {
-        struct timeval tv;
-        struct tm *tm;
-        char date_formatted[256];
-        char StringToSign[1024];
-        unsigned char *digest;
+        struct Cloud::AmzData *RequestData;
         CURL *curl;
         CURLcode res;
 
         std::string s;
 
         // We must get the directory content
-
-
-#if defined(FC_OS_WIN32)
-#else
-        gettimeofday(&tv,NULL);
-        tm = localtime(&tv.tv_sec);
-        strftime(date_formatted,256,"%a, %d %b %Y %T %z", tm);
-#endif
-
-        // CHANGEME
-        sprintf(StringToSign,"GET\n\napplication/octet-stream\n%s\n/%s/%s", date_formatted, this->Bucket, entry->FileName);
-        // We have to use HMAC encoding and SHA1
-        digest=HMAC(EVP_sha1(),this->SecretKey,strlen(this->SecretKey),
-                (const unsigned char *)&StringToSign,strlen(StringToSign),NULL,NULL);
+	char path[1024];
+	sprintf(path, "/%s/%s", this->Bucket, entry->FileName);
+        RequestData = Cloud::ComputeDigestAmzS3v2("GET", "application/octet-stream", path, this->SecretKey, NULL, 0);
 
         // Let's build the Header and call to curl
         curl_global_init(CURL_GLOBAL_ALL);
@@ -596,26 +603,21 @@ void Cloud::CloudReader::DownloadFile(Cloud::CloudReader::FileEntry *entry)
         if ( curl )
         {
                 struct curl_slist *chunk = NULL;
-                char header_data[1024];
+                char Url[256];
                 // Let's build our own header
 		std::string strUrl(this->Url);
                 eraseSubStr(strUrl,"http://");
                 eraseSubStr(strUrl,"https://");
-                sprintf(header_data,"Host: %s:%s", strUrl.c_str(),
-                                                   this->TcpPort);
-                chunk = curl_slist_append(chunk, header_data);
-                sprintf(header_data,"Date: %s", date_formatted);
-                chunk = curl_slist_append(chunk, header_data);
-                chunk = curl_slist_append(chunk, "Content-Type: application/octet-stream");
-                std::string digest_str;
-                digest_str=Base::base64_encode(digest,strlen((const char *)digest));
-                sprintf(header_data,"Authorization: AWS %s:%s", this->AccessKey,
-                digest_str.c_str());
-                chunk = curl_slist_append(chunk, header_data);
+
+                chunk = Cloud::BuildHeaderAmzS3v2( strUrl.c_str(), this->TcpPort, this->AccessKey, RequestData);
+		delete RequestData;
+
                 curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-                sprintf(header_data,"%s:%s/%s/%s", this->Url,this->TcpPort,
-                                                    this->Bucket,entry->FileName);
-                curl_easy_setopt(curl, CURLOPT_URL, header_data);
+
+                sprintf(Url,"%s:%s/%s/%s", this->Url,this->TcpPort,
+                                                    this->Bucket, entry->FileName);
+                curl_easy_setopt(curl, CURLOPT_URL, Url);
+
 //                curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWrite_CallbackFunc_StdString);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
@@ -696,31 +698,14 @@ bool Cloud::CloudWriter::shouldWrite(const std::string& , const Base::Persistenc
 
 void Cloud::CloudWriter::pushCloud(const char *FileName, const char *data, long size)
 {
-        struct timeval tv;
-        struct tm *tm;
-        char date_formatted[256];
-        char StringToSign[1024];
-        unsigned char *digest;
-        // char my_data[1024]="a que coucou";
-
+        struct Cloud::AmzData *RequestData;
         CURL *curl;
         CURLcode res;
+	struct data_buffer curl_buffer;
 
-        struct data_buffer curl_buffer;
-
-#if defined(FC_OS_WIN32)
-#else
-        gettimeofday(&tv,NULL);
-        tm = localtime(&tv.tv_sec);
-        strftime(date_formatted,256,"%a, %d %b %Y %T %z", tm);
-#endif
-
-        // CHANGEME
-        sprintf(StringToSign,"PUT\n\napplication/octet-stream\n%s\n/%s/%s", date_formatted, this->Bucket, FileName);
-
-        // We have to use HMAC encoding and SHA1
-        digest=HMAC(EVP_sha1(),this->SecretKey,strlen(this->SecretKey),
-                (const unsigned char *)&StringToSign,strlen(StringToSign),NULL,NULL);
+	char path[1024];
+        sprintf(path, "/%s/%s", this->Bucket, FileName);
+        RequestData = Cloud::ComputeDigestAmzS3v2("PUT", "application/octet-stream", path, this->SecretKey, data, size);
 
         // Let's build the Header and call to curl
         curl_global_init(CURL_GLOBAL_ALL);
@@ -728,28 +713,27 @@ void Cloud::CloudWriter::pushCloud(const char *FileName, const char *data, long 
         if ( curl )
         {
                 struct curl_slist *chunk = NULL;
-                char header_data[1024];
+		char Url[256];
                 // Let's build our own header
 		std::string strUrl(this->Url);
 		eraseSubStr(strUrl,"http://");
 		eraseSubStr(strUrl,"https://");
-				
-                sprintf(header_data,"Host: %s:%s", strUrl.c_str(),
-                                                   this->TcpPort);
-                chunk = curl_slist_append(chunk, header_data);
-                sprintf(header_data,"Date: %s", date_formatted);
-                chunk = curl_slist_append(chunk, header_data);
-                chunk = curl_slist_append(chunk, "Content-Type: application/octet-stream");
-                std::string digest_str;
-                digest_str=Base::base64_encode(digest,strlen((const char *)digest));
-                sprintf(header_data,"Authorization: AWS %s:%s", this->AccessKey,
-                digest_str.c_str());
-                chunk = curl_slist_append(chunk, header_data);
+
+
+		chunk = Cloud::BuildHeaderAmzS3v2( strUrl.c_str(), this->TcpPort, this->AccessKey, RequestData);
+		delete RequestData;
+
                 curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-//                curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-                sprintf(header_data,"%s:%s/%s/%s", this->Url,this->TcpPort,
+
+                // Lets build the Url for our Curl call
+
+                sprintf(Url,"%s:%s/%s/%s", this->Url,this->TcpPort,
                                                     this->Bucket,FileName);
-                curl_easy_setopt(curl, CURLOPT_URL, header_data);
+                curl_easy_setopt(curl, CURLOPT_URL, Url);
+
+				
+//                curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+
                 curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
                 curl_easy_setopt(curl, CURLOPT_PUT, 1L);
                 // curl read a file not a memory buffer (it shall be able to do it)
@@ -775,7 +759,7 @@ void Cloud::CloudWriter::writeFiles(void)
 {
 
     // use a while loop because it is possible that while
-    // processing the files new ones can be added
+    // processing the files, new ones can be added
     std::string tmp="";
     char *cstr;
     size_t index = 0;
@@ -889,7 +873,7 @@ bool Cloud::Module::cloudRestore (const char *BucketName)
 
     Document* doc = GetApplication().getActiveDocument();
     // clean up if the document is not empty
-    // !TODO mind exceptions while restoring!
+    // !TODO: mind exceptions while restoring!
 
     doc->clearUndos();
 

@@ -648,7 +648,7 @@ def getCoinSVG(cutplane,objs,cameradata=None,linewidth=0.2,singleface=False,face
     # but this creates artifacts in svg output, triangulation gets visible...
     ldict = {}
     if singleface:
-        for objs in objs:
+        for obj in objs:
             if hasattr(obj,"ViewObject") and hasattr(obj.ViewObject,"Lighting"):
                 ldict[obj.Name] = obj.ViewObject.Lighting
                 obj.ViewObject.Lighting = "One side"
@@ -1132,6 +1132,19 @@ class _ViewProviderSectionPlane:
     def doubleClicked(self,vobj):
 
         self.setEdit(vobj,None)
+
+    def setupContextMenu(self,vobj,menu):
+        """CONTEXT MENU setup"""
+        from PySide import QtCore,QtGui
+        action1 = QtGui.QAction(QtGui.QIcon(":/icons/Draft_Edit.svg"),"Toggle Cutview",menu)
+        action1.triggered.connect(lambda f=self.contextCutview, arg=vobj:f(arg))
+        menu.addAction(action1)
+    
+    def contextCutview(self,vobj):
+        """CONTEXT MENU command to toggle CutView property on and off"""
+        if vobj.CutView:
+            vobj.CutView = False
+        else: vobj.CutView = True        
 
 
 class _ArchDrawingView:

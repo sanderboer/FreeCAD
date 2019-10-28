@@ -806,7 +806,7 @@ def sortEdgesOld(lEdges, aVertex=None):
         return [count]+linstances
 
     if (len(lEdges) < 2):
-        if aVertex == None:
+        if aVertex is None:
             return lEdges
         else:
             result = lookfor(aVertex,lEdges)
@@ -829,7 +829,7 @@ def sortEdgesOld(lEdges, aVertex=None):
                         return lEdges
 
     olEdges = [] # ol stands for ordered list
-    if aVertex == None:
+    if aVertex is None:
         for i in range(len(lEdges)*2) :
             if len(lEdges[i/2].Vertexes) > 1:
                 result = lookfor(lEdges[i/2].Vertexes[i%2],lEdges)
@@ -1073,7 +1073,7 @@ def findPerpendicular(point,edgeslist,force=None):
             edgeslist = edgeslist.Edges
         except:
             return None
-    if (force == None):
+    if (force is None):
         valid = None
         for edge in edgeslist:
             dist = findDistance(point,edge,strict=True)
@@ -1116,9 +1116,18 @@ def offset(edge,vector,trim=False):
 
 def isReallyClosed(wire):
     "checks if a wire is really closed"
-    if len(wire.Edges) == len(wire.Vertexes): return True
-    v1 = wire.Vertexes[0].Point
-    v2 = wire.Vertexes[-1].Point
+
+    ## TODO yet to find out why not use wire.isClosed() direct, in isReallyClosed(wire)
+
+    # Remark out below - Found not true if a vertex is used again in a wire in sketch ( e.g. wire with shape like 'd', 'b', 'g'... )
+    #if len(wire.Edges) == len(wire.Vertexes): return True
+
+    # Found cases where Wire[-1] are not 'last' vertexes (e.g. Part.Wire( Part.__sortEdges__( <Rectangle Geometries>.toShape() ) )
+    # aboveWire.isClosed() == True, but Wire[-1] are the 3rd vertex for the rectangle
+    # - use Edges[i].Vertexes[0/1] instead
+    length = len(wire.Edges)
+    v1 = wire.Edges[0].Vertexes[0].Point  #v1 = wire.Vertexes[0].Point
+    v2 = wire.Edges[length-1].Vertexes[1].Point  #v2 = wire.Vertexes[-1].Point
     if DraftVecUtils.equals(v1,v2): return True
     return False
 
@@ -1183,7 +1192,7 @@ def offsetWire(wire,dvec,bind=False,occ=False,widthList=None):
     offsetWire(wire,vector,[bind]): offsets the given wire along the
     given vector. The vector will be applied at the first vertex of
     the wire. If bind is True (and the shape is open), the original
-    wire and the offsetted one are bound by 2 edges, forming a face.
+    wire and the offset one are bound by 2 edges, forming a face.
 
         If widthList is provided (values only, not lengths - i.e. no unit),
         each value will be used to offset each corresponding edge in the wire
@@ -2259,12 +2268,12 @@ def getBoundaryAngles(angle,alist):
         lower = None
         for a in alist:
                 if a < angle:
-                        if lower == None:
+                        if lower is None:
                                 lower = a
                         else:
                                 if a > lower:
                                         lower = a
-        if lower == None:
+        if lower is None:
                 lower = 0
                 for a in alist:
                         if a > lower:
@@ -2272,12 +2281,12 @@ def getBoundaryAngles(angle,alist):
         higher = None
         for a in alist:
                 if a > angle:
-                        if higher == None:
+                        if higher is None:
                                 higher = a
                         else:
                                 if a < higher:
                                         higher = a
-        if higher == None:
+        if higher is None:
                 higher = 2*math.pi
                 for a in alist:
                         if a < higher:

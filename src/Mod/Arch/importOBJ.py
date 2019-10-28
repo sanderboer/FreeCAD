@@ -21,7 +21,7 @@
 #***************************************************************************
 
 import FreeCAD, DraftGeomUtils, Part, Draft, Arch, Mesh, MeshPart, os, sys
-import numpy as np
+# import numpy as np
 if FreeCAD.GuiUp:
     from DraftTools import translate
 else:
@@ -61,7 +61,7 @@ def findVert(aVertex,aList):
     return None
 
 def getIndices(obj,shape,offsetv,offsetvn):
-    "returns a list with 2 lists: vertices and face indexes, offsetted with the given amount"
+    "returns a list with 2 lists: vertices and face indexes, offset with the given amount"
     vlist = []
     vnlist = []
     elist = []
@@ -129,7 +129,7 @@ def getIndices(obj,shape,offsetv,offsetvn):
                         #print(e.Vertexes[0].Point,e.Vertexes[1].Point)
                         v = e.Vertexes[0]
                         ind = findVert(v,shape.Vertexes)
-                        if ind == None:
+                        if ind is None:
                             return None,None,None
                         fi += " " + str(ind + offsetv)
                     flist.append(fi)
@@ -193,7 +193,7 @@ def export(exportList,filename,colors=None):
                         vlist,vnlist,elist,flist = getIndices(obj,obj.Shape,offsetv,offsetvn)
                     elif hasattr(obj,"Mesh") and obj.Mesh:
                         vlist,vnlist, elist,flist = getIndices(obj,obj.Mesh,offsetv,offsetvn)
-                if vlist == None:
+                if vlist is None:
                     FreeCAD.Console.PrintError("Unable to export object "+obj.Label+". Skipping.\n")
                 else:
                     offsetv += len(vlist)
@@ -248,7 +248,7 @@ def export(exportList,filename,colors=None):
                 if not mat[0] in done:
                     outfile.write("newmtl " + mat[0] + "\n")
                     outfile.write("Kd " + str(mat[1][0]) + " " + str(mat[1][1]) + " " + str(mat[1][2]) + "\n")
-                    outfile.write("d " + str(mat[2]) + "\n")
+                    outfile.write("Tr " + str(mat[2]/100) + "\n")
                     done.append(mat[0])
             else:
                 if not mat.Name in done:
