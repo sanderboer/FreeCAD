@@ -1256,8 +1256,14 @@ bool Application::activateWorkbench(const char* name)
 
         // now get the newly activated workbench
         Workbench* newWb = WorkbenchManager::instance()->active();
-        if (newWb)
+        if (newWb) {
+            if (!Instance->d->startingUp) {
+                std::string name = newWb->name();
+                App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")->
+                                      SetASCII("LastModule", name.c_str());
+            }
             newWb->activated();
+        }
     }
     catch (Py::Exception&) {
         Base::PyException e; // extract the Python error text
@@ -2021,15 +2027,26 @@ void Application::runApplication(void)
     // Activate the correct workbench
     std::string start = App::Application::Config()["StartWorkbench"];
     Base::Console().Log("Init: Activating default workbench %s\n", start.c_str());
-    start = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")->
+    std::string autoload = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")->
                            GetASCII("AutoloadModule", start.c_str());
+    if ("$LastModule" == autoload) {
+        start = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")->
+                               GetASCII("LastModule", start.c_str());
+    } else {
+        start = autoload;
+    }
     // if the auto workbench is not visible then force to use the default workbech
     // and replace the wrong entry in the parameters
     QStringList wb = app.workbenches();
     if (!wb.contains(QString::fromLatin1(start.c_str()))) {
         start = App::Application::Config()["StartWorkbench"];
-        App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")->
-                              SetASCII("AutoloadModule", start.c_str());
+        if ("$LastModule" == autoload) {
+            App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")->
+                                  SetASCII("LastModule", start.c_str());
+        } else {
+            App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")->
+                                  SetASCII("AutoloadModule", start.c_str());
+        }
     }
 
     // Call this before showing the main window because otherwise:
@@ -2048,6 +2065,13 @@ void Application::runApplication(void)
     mdi->setProperty("showImage", hGrp->GetBool("TiledBackground", false));
 
     std::string style = hGrp->GetASCII("StyleSheet");
+    if (style.empty()) {
+        // check the branding settings
+        const auto& config = App::Application::Config();
+        auto it = config.find("StyleSheet");
+        if (it != config.end())
+            style = it->second;
+    }
     if (!style.empty()) {
         QFile f(QLatin1String(style.c_str()));
         if (f.open(QFile::ReadOnly)) {

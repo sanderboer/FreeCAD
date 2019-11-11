@@ -31,7 +31,9 @@
 
 #include <gp_Ax2.hxx>
 #include <gp_Dir.hxx>
+#include <gp_Dir2d.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Vertex.hxx>
@@ -80,8 +82,10 @@ class TechDrawExport DrawUtil {
         static Base::Vector3d vertex2Vector(const TopoDS_Vertex& v);
         static std::string formatVector(const Base::Vector3d& v);
         static std::string formatVector(const gp_Dir& v);
+        static std::string formatVector(const gp_Dir2d& v);
         static std::string formatVector(const gp_Vec& v);
         static std::string formatVector(const gp_Pnt& v);
+        static std::string formatVector(const gp_Pnt2d& v);
         static std::string formatVector(const QPointF& v);
 
         static bool vectorLess(const Base::Vector3d& v1, const Base::Vector3d& v2);
@@ -154,7 +158,7 @@ class TechDrawExport DrawUtil {
 
         //debugging routines
         static void dumpVertexes(const char* text, const TopoDS_Shape& s);
-        static void dumpEdge(char* label, int i, TopoDS_Edge e);
+        static void dumpEdge(const char* label, int i, TopoDS_Edge e);
         static void dump1Vertex(const char* label, const TopoDS_Vertex& v);
         static void countFaces(const char* label, const TopoDS_Shape& s);
         static void countWires(const char* label, const TopoDS_Shape& s);
