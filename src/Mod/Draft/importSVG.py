@@ -19,7 +19,6 @@ Currently unsupported:
 # flake8 --ignore=E226,E266,E401,W503
 
 # ***************************************************************************
-# *                                                                         *
 # *   Copyright (c) 2009 Yorik van Havre <yorik@uncreated.net>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
@@ -42,7 +41,7 @@ Currently unsupported:
 
 __title__ = "FreeCAD Draft Workbench - SVG importer/exporter"
 __author__ = "Yorik van Havre, Sebastian Hoogen"
-__url__ = ["http://www.freecadweb.org"]
+__url__ = "https://www.freecadweb.org"
 
 # ToDo:
 # ignoring CDATA
@@ -356,7 +355,7 @@ def getsize(length, mode='discard', base=1):
         tomm = {
             '': 25.4/90,  # default
             'px': 25.4/90,
-            'pt': 1.25 * 25.4/90,
+            'pt': 4.0/3 * 25.4/90,
             'pc': 15 * 25.4/90,
             'mm': 1.0,
             'cm': 10.0,
@@ -369,7 +368,7 @@ def getsize(length, mode='discard', base=1):
         tomm = {
             '': 25.4/96,  # default
             'px': 25.4/96,
-            'pt': 1.25 * 25.4/96,
+            'pt': 4.0/3 * 25.4/96,
             'pc': 15 * 25.4/96,
             'mm': 1.0,
             'cm': 10.0,
@@ -382,7 +381,7 @@ def getsize(length, mode='discard', base=1):
         topx = {
             '': 1.0,  # default
             'px': 1.0,
-            'pt': 1.25,
+            'pt': 4.0/3,
             'pc': 15,
             'mm': 90.0/25.4,
             'cm': 90.0/254.0,
@@ -395,7 +394,7 @@ def getsize(length, mode='discard', base=1):
         topx = {
             '': 1.0,  # default
             'px': 1.0,
-            'pt': 1.25,
+            'pt': 4.0/3,
             'pc': 15,
             'mm': 96.0/25.4,
             'cm': 96.0/254.0,
@@ -714,18 +713,17 @@ class svgHandler(xml.sax.ContentHandler):
         if self.count == 1 and name == 'svg':
             if 'inkscape:version' in data:
                 inks_doc_name = attrs.getValue('sodipodi:docname')
-                inks_full_ver = attrs.getValue('inkscape:version')[:4]
-                inks_full_ver_list = inks_full_ver.split('.')
-                _maj = int(inks_full_ver_list[0])
-                _min = int(inks_full_ver_list[1])
-
+                inks_full_ver = attrs.getValue('inkscape:version')
+                inks_ver_pars = re.search("\d+\.\d+", inks_full_ver)
+                if inks_ver_pars != None:
+                    inks_ver_f = float(inks_ver_pars.group(0))
+                else:
+                    inks_ver_f = 99.99
                 # Inkscape before 0.92 used 90 dpi as resolution
                 # Newer versions use 96 dpi
-                if _maj == 0 and _min > 91:
-                    self.svgdpi = 96.0
-                elif _maj == 0 and _min < 92:
+                if inks_ver_f < 0.92:
                     self.svgdpi = 90.0
-                elif _maj > 0:
+                else:
                     self.svgdpi = 96.0
             if 'inkscape:version' not in data:
                 _msg = ("This SVG file does not appear to have been produced "
@@ -1466,7 +1464,7 @@ class svgHandler(xml.sax.ContentHandler):
         if self.text:
             FCC.PrintMessage("reading characters %s\n" % content)
             obj = self.doc.addObject("App::Annotation", 'Text')
-            obj.LabelText = content.encode('latin1')
+            obj.LabelText = content.encode('latin1', 'ignore')  # use ignore to not break import if char is not found in latin1
             if self.currentsymbol:
                 self.symbols[self.currentsymbol].append(obj)
             vec = Vector(self.x, -self.y, 0)

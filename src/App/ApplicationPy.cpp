@@ -1,5 +1,5 @@
 /***************************************************************************
- *   (c) Juergen Riegel (juergen.riegel@web.de) 2002                       *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -19,7 +19,6 @@
  *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
  *   USA                                                                   *
  *                                                                         *
- *   Juergen Riegel 2002                                                   *
  ***************************************************************************/
 
 
@@ -73,6 +72,8 @@ PyMethodDef Application::Methods[] = {
      "Dump the configuration to the output."},
     {"addImportType",  (PyCFunction) Application::sAddImportType, METH_VARARGS,
      "Register filetype for import"},
+    {"changeImportModule",  (PyCFunction) Application::sChangeImportModule, METH_VARARGS,
+     "Change the import module name of a registered filetype"},
     {"getImportType",  (PyCFunction) Application::sGetImportType, METH_VARARGS,
      "Get the name of the module that can import the filetype"},
     {"EndingAdd",      (PyCFunction) Application::sAddImportType, METH_VARARGS, // deprecated
@@ -81,6 +82,8 @@ PyMethodDef Application::Methods[] = {
      "deprecated -- use getImportType"},
     {"addExportType",  (PyCFunction) Application::sAddExportType, METH_VARARGS,
      "Register filetype for export"},
+    {"changeExportModule",  (PyCFunction) Application::sChangeExportModule, METH_VARARGS,
+     "Change the export module name of a registered filetype"},
     {"getExportType",  (PyCFunction) Application::sGetExportType, METH_VARARGS,
      "Get the name of the module that can export the filetype"},
     {"getResourceDir", (PyCFunction) Application::sGetResourceDir, METH_VARARGS,
@@ -119,7 +122,7 @@ PyMethodDef Application::Methods[] = {
      "newDocument(name, label=None, hidden=False) -> object\n"
      "Create a new document with a given name.\n\n"
      "name: unique document name which is checked automatically.\n"
-     "label: optional user changable label for the document.\n"
+     "label: optional user changeable label for the document.\n"
      "hidden: whether to hide document 3D view."},
     {"closeDocument",  (PyCFunction) Application::sCloseDocument, METH_VARARGS,
      "closeDocument(string) -> None\n\n"
@@ -527,6 +530,18 @@ PyObject* Application::sAddImportType(PyObject * /*self*/, PyObject *args)
     Py_Return;
 }
 
+PyObject* Application::sChangeImportModule(PyObject * /*self*/, PyObject *args)
+{
+    char *key,*oldMod,*newMod;
+
+    if (!PyArg_ParseTuple(args, "sss", &key,&oldMod,&newMod))
+        return nullptr;
+
+    GetApplication().changeImportModule(key,oldMod,newMod);
+
+    Py_Return;
+}
+
 PyObject* Application::sGetImportType(PyObject * /*self*/, PyObject *args)
 {
     char*       psKey=0;
@@ -575,6 +590,18 @@ PyObject* Application::sAddExportType(PyObject * /*self*/, PyObject *args)
         return NULL;
 
     GetApplication().addExportType(psKey,psMod);
+
+    Py_Return;
+}
+
+PyObject* Application::sChangeExportModule(PyObject * /*self*/, PyObject *args)
+{
+    char *key,*oldMod,*newMod;
+
+    if (!PyArg_ParseTuple(args, "sss", &key,&oldMod,&newMod))
+        return nullptr;
+
+    GetApplication().changeExportModule(key,oldMod,newMod);
 
     Py_Return;
 }

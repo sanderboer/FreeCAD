@@ -116,7 +116,7 @@ TechDraw::DrawViewSymbol* TaskActiveView::createActiveView(void)
 {
 //    Base::Console().Message("TAV::createActiveView()\n");
 
-    std::string symbolName = m_pageFeat->getDocument()->getUniqueObjectName("DrawActiveView");
+    std::string symbolName = m_pageFeat->getDocument()->getUniqueObjectName("ActiveView");
     std::string symbolType = "TechDraw::DrawViewSymbol";
 
     std::string pageName = m_pageFeat->getNameInDocument();
@@ -214,7 +214,7 @@ TaskDlgActiveView::TaskDlgActiveView(TechDraw::DrawPage* page)
     : TaskDialog()
 {
     widget  = new TaskActiveView(page);
-    taskbox = new Gui::TaskView::TaskBox(Gui::BitmapFactory().pixmap("actions/techdraw-activeview"),
+    taskbox = new Gui::TaskView::TaskBox(Gui::BitmapFactory().pixmap("actions/techdraw-ActiveView"),
                                              widget->windowTitle(), true, 0);
     taskbox->groupLayout()->addWidget(widget);
     Content.push_back(taskbox);

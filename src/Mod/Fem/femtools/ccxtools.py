@@ -1,7 +1,7 @@
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2015 - Przemo Firszt <przemo@firszt.eu>                 *
-# *   Copyright (c) 2016 - Bernd Hahnebach <bernd@bimstatik.org>            *
+# *   Copyright (c) 2015 Przemo Firszt <przemo@firszt.eu>                   *
+# *   Copyright (c) 2016 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -852,7 +852,7 @@ class FemToolsCcx(QtCore.QRunnable, QtCore.QObject):
                 # If user doesn't give a file but a path without a file or
                 # a file which is not a binary no exception at all is raised.
         except OSError as e:
-            FreeCAD.Console.PrintError(str(e))
+            FreeCAD.Console.PrintError("{}\n".format(e))
             if e.errno == 2:
                 error_message = (
                     "FEM: CalculiX binary ccx \'{}\' not found. "
@@ -864,7 +864,7 @@ class FemToolsCcx(QtCore.QRunnable, QtCore.QObject):
                     QtGui.QMessageBox.critical(None, error_title, error_message)
                 raise Exception(error_message)
         except Exception as e:
-            FreeCAD.Console.PrintError(str(e))
+            FreeCAD.Console.PrintError("{}\n".format(e))
             error_message = (
                 "FEM: CalculiX ccx \'{}\' output \'{}\' doesn't "
                 "contain expected phrase \'{}\'. "

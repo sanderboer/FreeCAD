@@ -1,5 +1,6 @@
 /***************************************************************************
- *   Copyright (c) 2012 Jan Rheinländer <jrheinlaender[at]users.sourceforge.net>     *
+ *   Copyright (c) 2012 Jan Rheinländer                                    *
+ *                                   <jrheinlaender@users.sourceforge.net> *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -192,7 +193,7 @@ App::DocumentObjectExecReturn *Draft::execute(void)
                 BRepAdaptor_Surface adapt(TopoDS::Face(face), Standard_False);
                 Handle(Geom_Surface) sf = adapt.Surface().Surface();
                 GeomAPI_IntSS intersector(aux, sf, Precision::Confusion());
-                if (!intersector.IsDone())
+                if (!intersector.IsDone() || intersector.NbLines() < 1)
                     continue;
                 Handle(Geom_Curve) icurve = intersector.Line(1);
                 if (!icurve->IsKind(STANDARD_TYPE(Geom_Line)))

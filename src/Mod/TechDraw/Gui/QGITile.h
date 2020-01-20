@@ -52,7 +52,7 @@ class QGIWeldSymbol;
 class TechDrawGuiExport QGITile : public QGIDecoration
 {
 public:
-    explicit QGITile();
+    explicit QGITile(TechDraw::DrawTileWeld*);
     ~QGITile(void);
 
     enum {Type = QGraphicsItem::UserType + 325};
@@ -64,7 +64,8 @@ public:
     void setTileTextLeft(std::string s);
     void setTileTextRight(std::string s);
     void setTileTextCenter(std::string s);
-    void setFont(QFont f, double fsize);
+    void setFont(QFont f, double fSizePx);
+    void setFont(std::string fName, double fSizePx);
     void setSymbolFile(std::string s);
     void setTilePosition(QPointF org, int r, int c);
     void setTileScale(double s);
@@ -84,20 +85,24 @@ protected:
     double getSymbolWidth(void) const;
     double getSymbolHeight(void) const;
     double getSymbolFactor(void) const;
+    QByteArray getSvgString(QString svgPath);
+
     QString prefTextFont(void) const;
     double prefFontSize(void) const;
-    double scaleToFont(void) const;
     void makeSymbol(void);
     void makeText(void);
 
     bool getAltWeld(void);
+    bool isReadable(QString filePath);
+    std::string getStringFromFile(std::string inSpec);
+
 
 private:
     QGCustomText*      m_qgTextL;
     QGCustomText*      m_qgTextR;
     QGCustomText*      m_qgTextC;
     QGCustomSvg*       m_qgSvg;
-    QGraphicsColorizeEffect* m_effect;
+  //QGraphicsColorizeEffect* m_effect;
     QString            m_svgPath;
     QString            m_textL;
     QString            m_textR;
@@ -112,6 +117,7 @@ private:
     int                m_col;
     bool               m_tailRight;
     bool               m_altWeld;
+    TechDraw::DrawTileWeld* m_tileFeat;
 };
 
 }

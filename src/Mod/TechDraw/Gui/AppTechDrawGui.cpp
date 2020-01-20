@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2007     *
+ *   Copyright (c) 2007 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -61,6 +61,8 @@
 #include "ViewProviderLeader.h"
 #include "ViewProviderTile.h"
 #include "ViewProviderWeld.h"
+
+#include "ViewProviderCosmeticExtension.h"
 
 
 // use a different name to CreateCommand()
@@ -140,6 +142,8 @@ PyMOD_INIT_FUNC(TechDrawGui)
     TechDrawGui::ViewProviderRichAnno::init();
     TechDrawGui::ViewProviderTile::init();
     TechDrawGui::ViewProviderWeld::init();
+
+    TechDrawGui::ViewProviderCosmeticExtension::init();
 
     // register preferences pages
     new Gui::PrefPageProducer<TechDrawGui::DlgPrefsTechDrawImp> ("TechDraw");

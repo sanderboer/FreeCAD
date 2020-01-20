@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 #***************************************************************************
-#*                                                                         *
 #*   Copyright (c) 2019 Yorik van Havre <yorik@uncreated.net>              *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
@@ -362,7 +361,7 @@ def render(outputfile,scene=None,camera=None,zoom=False,width=400,height=300,bac
 def buildScene(objects,colors=None):
 
     """buildScene(objects,colors=None): builds a coin node from a given list of FreeCAD
-    objects. Optional colors argument can be a dicionary of objName:ShapeColorTuple
+    objects. Optional colors argument can be a dictionary of objName:ShapeColorTuple
     or obj:DiffuseColorList pairs."""
 
     from pivy import coin
@@ -370,7 +369,7 @@ def buildScene(objects,colors=None):
     root = coin.SoSeparator()
     for o in objects:
         buf = None
-        if o.isDerivedFrom("Part::Feature"):
+        if hasattr(o,'Shape'):
             # writeInventor of shapes needs tessellation values
             buf = o.Shape.writeInventor(2,0.01)
         elif o.isDerivedFrom("Mesh::Feature"):

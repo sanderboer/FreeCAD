@@ -1,6 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Victor Titov (DeepSOIC)                                 *
- *                                           (vv.titov@gmail.com) 2015     *
+ *   Copyright (c) 2015 Victor Titov (DeepSOIC) <vv.titov@gmail.com>       *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -821,7 +820,7 @@ void AttachEngine::readLinks(const App::PropertyLinkSubList &references,
             shapes[i] = &(storage[storage.size()-1]);
         } else {
             Base::Console().Warning("Attacher: linked object %s is unexpected, assuming it has no shape.\n",geof->getNameInDocument());
-            storage.push_back(TopoDS_Shape());
+            storage.emplace_back();
             shapes[i] = &(storage[storage.size()-1]);
         }
 

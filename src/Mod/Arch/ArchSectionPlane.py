@@ -1,7 +1,5 @@
 #***************************************************************************
-#*                                                                         *
-#*   Copyright (c) 2011                                                    *
-#*   Yorik van Havre <yorik@uncreated.net>                                 *
+#*   Copyright (c) 2011 Yorik van Havre <yorik@uncreated.net>              *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
 #*   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -177,7 +175,7 @@ def getCutShapes(objs,cutplane,onlySolids,clip,joinArch,showHidden,groupSshapesB
                     shtypes.setdefault(o.Material.Name if (hasattr(o,"Material") and o.Material) else "None",[]).extend(o.Shape.Solids)
                 else:
                     shtypes.setdefault(o.Material.Name if (hasattr(o,"Material") and o.Material) else "None",[]).append(o.Shape.copy())
-            elif o.isDerivedFrom("Part::Feature"):
+            elif hasattr(o,'Shape'):
                 if o.Shape.isNull():
                     pass
                 elif onlySolids:
@@ -200,7 +198,7 @@ def getCutShapes(objs,cutplane,onlySolids,clip,joinArch,showHidden,groupSshapesB
                 objectShapes.append((k,[v1]))
     else:
         for o in objs:
-            if o.isDerivedFrom("Part::Feature"):
+            if hasattr(o,'Shape'):
                 if o.Shape.isNull():
                     pass
                 elif onlySolids:

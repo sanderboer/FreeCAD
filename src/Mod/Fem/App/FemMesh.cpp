@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2009     *
+ *   Copyright (c) 2009 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -595,7 +595,7 @@ std::list<std::pair<int, int> > FemMesh::getVolumesByFace(const TopoDS_Face &fac
 
             // For curved faces it is possible that a volume contributes more than one face
             if (element_face_nodes.size() == static_cast<std::size_t>(numNodes)) {
-                result.push_back(std::make_pair(vol->GetID(), face->GetID()));
+                result.emplace_back(vol->GetID(), face->GetID());
             }
         }
     }
@@ -1023,7 +1023,7 @@ void FemMesh::readNastran(const std::string &Filename)
     {
         std::getline(inputfile,line1);
         if (line1.size() == 0) continue;
-        if (!nastran_free_format && line1.find(",")!= std::string::npos)
+        if (!nastran_free_format && line1.find(',')!= std::string::npos)
             nastran_free_format = true;
         if (!nastran_free_format && line1.find("GRID*")!= std::string::npos ) //We found a Grid line
         {

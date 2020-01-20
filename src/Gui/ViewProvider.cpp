@@ -514,6 +514,13 @@ int ViewProvider::getDefaultMode() const {
     return viewOverrideMode>=0?viewOverrideMode:_iActualMode;
 }
 
+void ViewProvider::onBeforeChange(const App::Property* prop)
+{
+    Application::Instance->signalBeforeChangeObject(*this, *prop);
+
+    App::TransactionalObject::onBeforeChange(prop);
+}
+
 void ViewProvider::onChanged(const App::Property* prop)
 {
     Application::Instance->signalChangedObject(*this, *prop);
@@ -612,7 +619,7 @@ std::vector<Base::Vector3d> ViewProvider::getModelPoints(const SoPickedPoint* pp
     // the default implementation just returns the picked point from the visual representation
     std::vector<Base::Vector3d> pts;
     const SbVec3f& vec = pp->getPoint();
-    pts.push_back(Base::Vector3d(vec[0],vec[1],vec[2]));
+    pts.emplace_back(vec[0],vec[1],vec[2]);
     return pts;
 }
 

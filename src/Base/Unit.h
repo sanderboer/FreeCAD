@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) 2011 Juergen Riegel                                     *
+ *   Copyright (c) 2011 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -110,6 +110,14 @@ public:
 
     static Unit ElectricCurrent;
     static Unit ElectricPotential;
+    static Unit ElectricCharge;
+    static Unit MagneticFieldStrength;
+    static Unit MagneticFlux;
+    static Unit MagneticFluxDensity;
+    static Unit ElectricalCapacitance;
+    static Unit ElectricalInductance;
+    static Unit ElectricalConductance;
+    static Unit ElectricalResistance;
     static Unit AmountOfSubstance;
     static Unit LuminousIntensity;
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) 2004 Juergen Riegel <juergen.riegel@web.de>             *
+ *   Copyright (c) 2004 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -968,6 +968,15 @@ SbBool View3DInventorViewer::hasViewProvider(ViewProvider* pcProvider) const
     return _ViewProviderSet.find(pcProvider) != _ViewProviderSet.end();
 }
 
+SbBool View3DInventorViewer::containsViewProvider(const ViewProvider* vp) const
+{
+    SoSearchAction sa;
+    sa.setNode(vp->getRoot());
+    sa.setSearchingAll(true);
+    sa.apply(getSoRenderManager()->getSceneGraph());
+    return sa.getPath() != nullptr;
+}
+
 /// adds an ViewProvider to the view, e.g. from a feature
 void View3DInventorViewer::addViewProvider(ViewProvider* pcProvider)
 {
@@ -1479,10 +1488,14 @@ void View3DInventorViewer::savePicture(int w, int h, int s, const QColor& bg, QI
         ("User parameter:BaseApp/Preferences/View")->GetASCII("SavePicture");
 
     bool useFramebufferObject = false;
+    bool useGrabFramebuffer = false;
     bool usePixelBuffer = false;
     bool useCoinOffscreenRenderer = false;
     if (saveMethod == "FramebufferObject") {
         useFramebufferObject = true;
+    }
+    else if (saveMethod == "GrabFramebuffer") {
+        useGrabFramebuffer = true;
     }
     else if (saveMethod == "PixelBuffer") {
         usePixelBuffer = true;
@@ -1494,6 +1507,13 @@ void View3DInventorViewer::savePicture(int w, int h, int s, const QColor& bg, QI
     if (useFramebufferObject) {
         View3DInventorViewer* self = const_cast<View3DInventorViewer*>(this);
         self->imageFromFramebuffer(w, h, s, bg, img);
+        return;
+    }
+    else if (useGrabFramebuffer) {
+        View3DInventorViewer* self = const_cast<View3DInventorViewer*>(this);
+        img = self->grabFramebuffer();
+        img = img.mirrored();
+        img = img.scaledToWidth(w);
         return;
     }
 
@@ -1588,6 +1608,7 @@ void View3DInventorViewer::savePicture(int w, int h, int s, const QColor& bg, QI
             renderer.setViewportRegion(vp);
             renderer.getGLRenderAction()->setSmoothing(true);
             renderer.getGLRenderAction()->setNumPasses(s);
+            renderer.getGLRenderAction()->setTransparencyType(SoGLRenderAction::SORTED_OBJECT_SORTED_TRIANGLE_BLEND);
             if (bgColor.isValid())
                 renderer.setBackgroundColor(SbColor(bgColor.redF(), bgColor.greenF(), bgColor.blueF()));
             if (!renderer.render(root))
@@ -1595,6 +1616,15 @@ void View3DInventorViewer::savePicture(int w, int h, int s, const QColor& bg, QI
 
             renderer.writeToImage(img);
             root->unref();
+        }
+
+        if (!bgColor.isValid() || bgColor.alphaF() == 1.0) {
+            QImage image(img.width(), img.height(), QImage::Format_RGB32);
+            QPainter painter(&image);
+            painter.fillRect(image.rect(), Qt::black);
+            painter.drawImage(0, 0, img);
+            painter.end();
+            img = image;
         }
     }
     catch (...) {
@@ -2002,7 +2032,7 @@ QImage View3DInventorViewer::grabFramebuffer()
     int w = gl->width();
     int h = gl->height();
     QImage img(QSize(w,h), QImage::Format_RGB32);
-    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, img.bits());
+    glReadPixels(0, 0, w, h, GL_BGRA, GL_UNSIGNED_BYTE, img.bits());
     res = img;
 #else
     const SbViewportRegion vp = this->getSoRenderManager()->getViewportRegion();
@@ -2028,6 +2058,13 @@ QImage View3DInventorViewer::grabFramebuffer()
         renderToFramebuffer(&fbo);
 
         res = fbo.toImage(false);
+
+        QImage image(res.width(), res.height(), QImage::Format_RGB32);
+        QPainter painter(&image);
+        painter.fillRect(image.rect(),Qt::black);
+        painter.drawImage(0, 0, res);
+        painter.end();
+        res = image;
     }
 #endif
 
@@ -2091,6 +2128,13 @@ void View3DInventorViewer::imageFromFramebuffer(int width, int height, int sampl
                 bits++;
             }
         }
+    } else if (alpha == 255) {
+        QImage image(img.width(), img.height(), QImage::Format_RGB32);
+        QPainter painter(&image);
+        painter.fillRect(image.rect(),Qt::black);
+        painter.drawImage(0, 0, img);
+        painter.end();
+        img = image;
     }
 }
 
@@ -2191,6 +2235,9 @@ void View3DInventorViewer::renderFramebuffer()
     for (std::list<GLGraphicsItem*>::iterator it = this->graphicsItems.begin(); it != this->graphicsItems.end(); ++it)
         (*it)->paintGL();
 
+    if (naviCubeEnabled)
+        naviCube->drawNaviCube();
+
     glEnable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
 }
@@ -2223,6 +2270,9 @@ void View3DInventorViewer::renderGLImage()
 
     for (std::list<GLGraphicsItem*>::iterator it = this->graphicsItems.begin(); it != this->graphicsItems.end(); ++it)
         (*it)->paintGL();
+
+    if (naviCubeEnabled)
+        naviCube->drawNaviCube();
 
     glEnable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);

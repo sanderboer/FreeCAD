@@ -1,7 +1,6 @@
 # -*- coding: utf8 -*-
 
 #***************************************************************************
-#*                                                                         *
 #*   Copyright (c) 2018 Yorik van Havre <yorik@uncreated.net>              *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
@@ -310,6 +309,7 @@ class CommandBuildingPart:
         FreeCADGui.addModule("Arch")
         FreeCADGui.doCommand("obj = Arch.makeBuildingPart("+ss+")")
         FreeCADGui.addModule("Draft")
+        FreeCADGui.doCommand("obj.Placement = FreeCAD.DraftWorkingPlane.getPlacement()")
         FreeCADGui.doCommand("Draft.autogroup(obj)")
         FreeCAD.ActiveDocument.commitTransaction()
         FreeCAD.ActiveDocument.recompute()
@@ -445,7 +445,7 @@ class BuildingPart(ArchIFC.IfcProduct):
 
         shapes = []
         for child in Draft.getGroupContents(obj):
-            if child.isDerivedFrom("Part::Feature"):
+            if hasattr(child,'Shape'):
                 shapes.extend(child.Shape.Faces)
         return shapes
 
@@ -645,7 +645,7 @@ class ViewProviderBuildingPart:
 
         colors = []
         for child in Draft.getGroupContents(obj):
-            if child.isDerivedFrom("Part::Feature"):
+            if hasattr(child,'Shape'):
                 if len(child.ViewObject.DiffuseColor) == len(child.Shape.Faces):
                     colors.extend(child.ViewObject.DiffuseColor)
                 else:
@@ -838,6 +838,7 @@ class ViewProviderBuildingPart:
                 else:
                     self.wptext = FreeCADGui.draftToolBar.wplabel.text()
                     FreeCADGui.draftToolBar.wplabel.setText(self.Object.Label)
+            FreeCAD.DraftWorkingPlane.lastBuildingPart = self.Object.Name
 
     def writeCamera(self):
 

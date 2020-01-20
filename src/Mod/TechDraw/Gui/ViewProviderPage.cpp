@@ -185,7 +185,7 @@ void ViewProviderPage::updateData(const App::Property* prop)
        }
     } else if (prop == &page->Views) {
         if(m_mdiView && !page->isUnsetting()) 
-            m_mdiView->updateDrawing();
+            m_mdiView->fixOrphans();
     }
 
     Gui::ViewProviderDocumentObject::updateData(prop);
@@ -247,7 +247,6 @@ bool ViewProviderPage::showMDIViewPage()
         Gui::Document* doc = Gui::Application::Instance->getDocument
             (pcObject->getDocument());
         m_mdiView = new MDIViewPage(this, doc, Gui::getMainWindow());
-//        QString tabTitle = QString::fromUtf8(getDrawPage()->getNameInDocument());
         QString tabTitle = QString::fromUtf8(getDrawPage()->Label.getValue());
 
         m_mdiView->setDocumentObject(getDrawPage()->getNameInDocument());
@@ -255,16 +254,15 @@ bool ViewProviderPage::showMDIViewPage()
 
         m_mdiView->setWindowTitle(tabTitle + QString::fromLatin1("[*]"));
         m_mdiView->setWindowIcon(Gui::BitmapFactory().pixmap("TechDraw_Tree_Page"));
-        m_mdiView->updateDrawing(true);
         Gui::getMainWindow()->addWindow(m_mdiView);
-        m_mdiView->viewAll();  //this is empty function
+        m_mdiView->viewAll();
         m_mdiView->showMaximized();
-//        if(!getDrawPage()->KeepUpdated.getValue())
-//            getDrawPage()->KeepUpdated.setValue(true);
+        m_mdiView->addChildrenToPage();
+        m_mdiView->fixOrphans(true);
     } else {
-        m_mdiView->updateDrawing(true);
-        m_mdiView->redrawAllViews();
         m_mdiView->updateTemplate(true);
+        m_mdiView->redrawAllViews();
+        m_mdiView->fixOrphans(true);
     }
     return true;
 }
@@ -335,7 +333,7 @@ void ViewProviderPage::unsetEdit(int ModNum)
 }
 
 
-MDIViewPage* ViewProviderPage::getMDIViewPage()
+MDIViewPage* ViewProviderPage::getMDIViewPage() const
 {
     if (m_mdiView.isNull()) {
         Base::Console().Log("INFO - ViewProviderPage::getMDIViewPage has no m_mdiView!\n");
@@ -429,7 +427,7 @@ void ViewProviderPage::onGuiRepaint(const TechDraw::DrawPage* dp)
     if (dp == getDrawPage()) {
         if(!m_mdiView.isNull() &&
            !getDrawPage()->isUnsetting()) {
-            m_mdiView->updateDrawing();
+            m_mdiView->fixOrphans();
         }
     }
 }
@@ -444,7 +442,8 @@ TechDraw::DrawPage* ViewProviderPage::getDrawPage() const
     return dynamic_cast<TechDraw::DrawPage*>(pcObject);
 }
 
-Gui::MDIView *ViewProviderPage::getMDIView() {
-    showMDIViewPage();
+Gui::MDIView *ViewProviderPage::getMDIView() const
+{
+    const_cast<ViewProviderPage*>(this)->showMDIViewPage();
     return m_mdiView.data();
 }

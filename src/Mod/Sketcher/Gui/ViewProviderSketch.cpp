@@ -91,7 +91,7 @@
 #include <Gui/Application.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Document.h>
-#include <Gui/Command.h>
+#include <Gui/CommandT.h>
 #include <Gui/Control.h>
 #include <Gui/Selection.h>
 #include <Gui/Utilities.h>
@@ -789,8 +789,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                         if (GeoId != Sketcher::Constraint::GeoUndef && PosId != Sketcher::none) {
                             getDocument()->openCommand("Drag Point");
                             try {
-                                FCMD_OBJ_CMD2("movePoint(%i,%i,App.Vector(%f,%f,0),%i)"
-                                        ,getObject()
+                                Gui::cmdAppObjectArgs(getObject(), "movePoint(%i,%i,App.Vector(%f,%f,0),%i)"
                                         ,GeoId, PosId, x-xInit, y-yInit, 0);
                                 getDocument()->commitCommand();
 
@@ -821,8 +820,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                             geo->getTypeId() == Part::GeomBSplineCurve::getClassTypeId()) {
                             getDocument()->openCommand("Drag Curve");
                             try {
-                                FCMD_OBJ_CMD2("movePoint(%i,%i,App.Vector(%f,%f,0),%i)"
-                                        ,getObject()
+                                Gui::cmdAppObjectArgs(getObject(), "movePoint(%i,%i,App.Vector(%f,%f,0),%i)"
                                         ,edit->DragCurve, Sketcher::none, x-xInit, y-yInit, relative ? 1 : 0);
                                 getDocument()->commitCommand();
 
@@ -867,6 +865,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
 
                     // a redraw is required in order to clear the rubberband
                     draw(true,false);
+                    const_cast<Gui::View3DInventorViewer*>(viewer)->redraw();
                     Mode = STATUS_NONE;
                     return true;
                 case STATUS_SKETCH_UseHandler: {
@@ -1019,7 +1018,7 @@ void ViewProviderSketch::editDoubleClicked(void)
             if (Constr->isDimensional()) {
 
                 if(!Constr->isDriving) {
-                    FCMD_OBJ_CMD2("setDriving(%i,%s)", getObject(),id,"True");
+                    Gui::cmdAppObjectArgs(getObject(), "setDriving(%i,%s)", id, "True");
                 }
 
                 // Coin's SoIdleSensor causes problems on some platform while Qt seems to work properly (#0001517)
@@ -2896,20 +2895,20 @@ QString ViewProviderSketch::getPresentationString(const Constraint *constraint)
         // If this is a supported unit system then define what the base unit is.
         switch (unitSys)
         {
-            case Base::SI1:
-            case Base::MmMin:
+            case Base::UnitSystem::SI1:
+            case Base::UnitSystem::MmMin:
                 baseUnitStr = QString::fromLatin1("mm");
                 break;
 
-            case Base::SI2:
+            case Base::UnitSystem::SI2:
                 baseUnitStr = QString::fromLatin1("m");
                 break;
 
-            case Base::ImperialDecimal:
+            case Base::UnitSystem::ImperialDecimal:
                 baseUnitStr = QString::fromLatin1("in");
                 break;
 
-            case Base::Centimeters:
+            case Base::UnitSystem::Centimeters:
                 baseUnitStr = QString::fromLatin1("cm");
                 break;
 
@@ -3556,7 +3555,7 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
     int stdcountsegments = hGrp->GetInt("SegmentsPerGeometry", 50);
 
     // RootPoint
-    Points.push_back(Base::Vector3d(0.,0.,0.));
+    Points.emplace_back(0.,0.,0.);
 
     for (std::vector<Part::Geometry *>::const_iterator it = geomlist->begin(); it != geomlist->end()-2; ++it, GeoId++) {
         if (GeoId >= intGeoCount)
@@ -3587,11 +3586,11 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
             double segment = (2 * M_PI) / countSegments;
             for (int i=0; i < countSegments; i++) {
                 gp_Pnt pnt = curve->Value(i*segment);
-                Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+                Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
             }
 
             gp_Pnt pnt = curve->Value(0);
-            Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+            Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
 
             Index.push_back(countSegments+1);
             edit->CurvIdToGeoId.push_back(GeoId);
@@ -3607,11 +3606,11 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
             double segment = (2 * M_PI) / countSegments;
             for (int i=0; i < countSegments; i++) {
                 gp_Pnt pnt = curve->Value(i*segment);
-                Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+                Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
             }
 
             gp_Pnt pnt = curve->Value(0);
-            Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+            Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
 
             Index.push_back(countSegments+1);
             edit->CurvIdToGeoId.push_back(GeoId);
@@ -3637,13 +3636,13 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
 
             for (int i=0; i < countSegments; i++) {
                 gp_Pnt pnt = curve->Value(startangle);
-                Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+                Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
                 startangle += segment;
             }
 
             // end point
             gp_Pnt pnt = curve->Value(endangle);
-            Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+            Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
 
             Index.push_back(countSegments+1);
             edit->CurvIdToGeoId.push_back(GeoId);
@@ -3673,13 +3672,13 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
 
             for (int i=0; i < countSegments; i++) {
                 gp_Pnt pnt = curve->Value(startangle);
-                Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+                Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
                 startangle += segment;
             }
 
             // end point
             gp_Pnt pnt = curve->Value(endangle);
-            Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+            Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
 
             Index.push_back(countSegments+1);
             edit->CurvIdToGeoId.push_back(GeoId);
@@ -3709,13 +3708,13 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
 
             for (int i=0; i < countSegments; i++) {
                 gp_Pnt pnt = curve->Value(startangle);
-                Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+                Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
                 startangle += segment;
             }
 
             // end point
             gp_Pnt pnt = curve->Value(endangle);
-            Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+            Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
 
             Index.push_back(countSegments+1);
             edit->CurvIdToGeoId.push_back(GeoId);
@@ -3745,13 +3744,13 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
 
             for (int i=0; i < countSegments; i++) {
                 gp_Pnt pnt = curve->Value(startangle);
-                Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+                Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
                 startangle += segment;
             }
 
             // end point
             gp_Pnt pnt = curve->Value(endangle);
-            Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+            Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
 
             Index.push_back(countSegments+1);
             edit->CurvIdToGeoId.push_back(GeoId);
@@ -3781,13 +3780,13 @@ void ViewProviderSketch::draw(bool temp /*=false*/, bool rebuildinformationlayer
 
             for (int i=0; i < countSegments; i++) {
                 gp_Pnt pnt = curve->Value(first);
-                Coords.push_back(Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z()));
+                Coords.emplace_back(pnt.X(), pnt.Y(), pnt.Z());
                 first += segment;
             }
 
             // end point
             gp_Pnt end = curve->Value(last);
-            Coords.push_back(Base::Vector3d(end.X(), end.Y(), end.Z()));
+            Coords.emplace_back(end.X(), end.Y(), end.Z());
 
             Index.push_back(countSegments+1);
             edit->CurvIdToGeoId.push_back(GeoId);
@@ -6431,7 +6430,7 @@ bool ViewProviderSketch::onDelete(const std::vector<std::string> &subList)
 
         for (rit = delConstraints.rbegin(); rit != delConstraints.rend(); ++rit) {
             try {
-                FCMD_OBJ_CMD2("delConstraint(%i)" ,getObject(), *rit);
+                Gui::cmdAppObjectArgs(getObject(), "delConstraint(%i)", *rit);
             }
             catch (const Base::Exception& e) {
                 Base::Console().Error("%s\n", e.what());
@@ -6454,7 +6453,7 @@ bool ViewProviderSketch::onDelete(const std::vector<std::string> &subList)
                     if (((*it)->Type == Sketcher::Coincident) && (((*it)->First == GeoId && (*it)->FirstPos == PosId) ||
                         ((*it)->Second == GeoId && (*it)->SecondPos == PosId)) ) {
                         try {
-                            FCMD_OBJ_CMD2("delConstraintOnPoint(%i,%i)" ,getObject(), GeoId, (int)PosId);
+                            Gui::cmdAppObjectArgs(getObject(), "delConstraintOnPoint(%i,%i)", GeoId, (int)PosId);
                         }
                         catch (const Base::Exception& e) {
                             Base::Console().Error("%s\n", e.what());
@@ -6467,7 +6466,7 @@ bool ViewProviderSketch::onDelete(const std::vector<std::string> &subList)
 
         for (rit = delInternalGeometries.rbegin(); rit != delInternalGeometries.rend(); ++rit) {
             try {
-                FCMD_OBJ_CMD2("delGeometry(%i)" ,getObject(), *rit);
+                Gui::cmdAppObjectArgs(getObject(), "delGeometry(%i)", *rit);
             }
             catch (const Base::Exception& e) {
                 Base::Console().Error("%s\n", e.what());
@@ -6476,7 +6475,7 @@ bool ViewProviderSketch::onDelete(const std::vector<std::string> &subList)
 
         for (rit = delExternalGeometries.rbegin(); rit != delExternalGeometries.rend(); ++rit) {
             try {
-                FCMD_OBJ_CMD2("delExternal(%i)",getObject(), *rit);
+                Gui::cmdAppObjectArgs(getObject(), "delExternal(%i)", *rit);
             }
             catch (const Base::Exception& e) {
                 Base::Console().Error("%s\n", e.what());

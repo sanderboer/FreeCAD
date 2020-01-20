@@ -40,6 +40,7 @@
 #include <QTextStream>
 #include <QFile>
 #include <QLabel>
+#include <QTextCodec>
 #include <cmath>
 #endif
 
@@ -496,34 +497,29 @@ void QGVPage::addDimToParent(QGIViewDimension* dim, QGIView* parent)
 QGIView * QGVPage::addViewLeader(TechDraw::DrawLeaderLine *leader)
 {
 //    Base::Console().Message("QGVP::addViewLeader(%s)\n",leader->getNameInDocument());
-    QGILeaderLine* leaderGroup = nullptr;
+    QGILeaderLine* leaderGroup = new QGILeaderLine();
 
-    App::DocumentObject* parentObj = leader->LeaderParent.getValue();
-    TechDraw::DrawView*  parentDV  = dynamic_cast<TechDraw::DrawView*>(parentObj);
+    auto ourScene( scene() );
+    ourScene->addItem(leaderGroup);
 
-    //NOTE: if Leaders are ever allowed to not be attached to a View, this next bit will have to change
-    if (parentDV != nullptr) {
-        QGIView* parentQV = findQViewForDocObj(parentObj);
-        if (parentQV != nullptr) {
-            leaderGroup = new QGILeaderLine(parentQV, leader);
-            leaderGroup->updateView(true);            //this is different from everybody else,
-                                                      //but it works. 
-            return leaderGroup;
-        }
-    } else {
-        throw Base::TypeError("QGVP::addViewLeader - parent DV has no QGIV");
+    leaderGroup->setLeaderFeature(leader);
+
+    QGIView *parent = 0;
+    parent = findParent(leaderGroup);
+
+    if(parent) {
+        addLeaderToParent(leaderGroup,parent);
     }
-    return nullptr;
+
+    leaderGroup->updateView(true);
+
+    return leaderGroup;
 }
 
 void QGVPage::addLeaderToParent(QGILeaderLine* lead, QGIView* parent)
 {
-    assert(lead);
-    assert(parent);          //blow up if we don't have Leader or Parent
-    QPointF posRef(0.,0.);
-    QPointF mapPos = lead->mapToItem(parent, posRef);
-    lead->moveBy(-mapPos.x(), -mapPos.y());
-    parent->addToGroup(lead);              //vs lead->setParentItem(parent)??
+//    Base::Console().Message("QGVP::addLeaderToParent()\n");
+    parent->addToGroup(lead);
     lead->setZValue(ZVALUE::DIMENSION);
 }
 
@@ -610,7 +606,7 @@ QGIView* QGVPage::getQGIVByName(std::string name)
     return nullptr;
 }
 
-
+//find the parent of a QGIV based on the corresponding feature's parentage
 QGIView * QGVPage::findParent(QGIView *view) const
 {
     const std::vector<QGIView *> qviews = getViews();
@@ -639,7 +635,7 @@ QGIView * QGVPage::findParent(QGIView *view) const
     balloon = dynamic_cast<TechDraw::DrawViewBalloon *>(myFeat);
 
     if(balloon) {
-        App::DocumentObject* obj = balloon->sourceView.getValue();
+        App::DocumentObject* obj = balloon->SourceView.getValue();
 
         if(obj) {
             // Attach the dimension to the first object's group
@@ -743,8 +739,8 @@ void QGVPage::refreshViews(void)
     QList<QGraphicsItem*> qgiv;
     //find only QGIV's 
     for (auto q: list) {
-        QString tileFamily = QString::fromUtf8("QGIV");
-        if (tileFamily == q->data(0).toString()) {
+        QString viewFamily = QString::fromUtf8("QGIV");
+        if (viewFamily == q->data(0).toString()) {
             qgiv.push_back(q);
         }
     }
@@ -756,19 +752,14 @@ void QGVPage::refreshViews(void)
     }
 }
 
-void QGVPage::toggleHatch(bool enable)
+void QGVPage::setExporting(bool enable)
 {
+//    Base::Console().Message("QGVP::setExporting(%d)\n", enable);
     QList<QGraphicsItem*> sceneItems = scene()->items();
     for (auto& qgi:sceneItems) {
         QGIViewPart* qgiPart = dynamic_cast<QGIViewPart *>(qgi);
         if(qgiPart) {
-            QList<QGraphicsItem*> partChildren = qgiPart->childItems();
-            int faceItemType = QGraphicsItem::UserType + 104;
-            for (auto& c:partChildren) {
-                if (c->type() == faceItemType) {
-                    static_cast<QGIFace*>(c)->toggleSvg(enable);
-                }
-            }
+            qgiPart->setExporting(enable);
         }
     }
 }
@@ -810,7 +801,7 @@ void QGVPage::saveSvg(QString filename)
     bool saveState = m_vpPage->getFrameState();
     m_vpPage->setFrameState(false);
     m_vpPage->setTemplateMarkers(false);
-    toggleHatch(false);
+    setExporting(true);
 
     // Here we temporarily hide the page template, because Qt would otherwise convert the SVG template
     // texts into series of paths, making the later document edits practically unfeasible.
@@ -839,7 +830,7 @@ void QGVPage::saveSvg(QString filename)
 
     m_vpPage->setFrameState(saveState);
     m_vpPage->setTemplateMarkers(saveState);
-    toggleHatch(true);
+    setExporting(false);
     if (templateVisible) {
         svgTemplate->show();
     }
@@ -954,8 +945,9 @@ void QGVPage::postProcessXml(QTemporaryFile& temporaryFile, QString fileName, QS
 
     QTextStream stream( &outFile );
     stream.setGenerateByteOrderMark(true);
+    stream.setCodec("UTF-8");
 
-    stream << exportDoc.toString();
+    stream << exportDoc.toByteArray();
     outFile.close();
 }
 
@@ -1168,7 +1160,7 @@ void QGVPage::mouseReleaseEvent(QMouseEvent *event)
             throw Base::TypeError("CmdTechDrawNewBalloon - balloon not found\n");
         }
 
-        balloon->sourceView.setValue(getDrawPage()->balloonParent);
+        balloon->SourceView.setValue(getDrawPage()->balloonParent);
         balloon->origin = mapToScene(event->pos());
 
         Gui::Command::commitCommand();

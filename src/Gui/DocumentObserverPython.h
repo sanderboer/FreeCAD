@@ -65,6 +65,8 @@ private:
     /** Checks if the given object is about to be removed. */
     void slotDeletedObject(const Gui::ViewProvider& Obj);
     /** The property of an observed object has changed */
+    void slotBeforeChangeObject(const Gui::ViewProvider& Obj, const App::Property& Prop);
+    /** The property of an observed object has changed */
     void slotChangedObject(const Gui::ViewProvider& Obj, const App::Property& Prop);
     /** The object was set into edit mode */
     void slotInEdit(const Gui::ViewProviderDocumentObject& Obj);
@@ -75,26 +77,25 @@ private:
     Py::Object inst;
     static std::vector<DocumentObserverPython*> _instances;
 
-    typedef boost::signals2::connection Connection;
+    typedef struct {
+       boost::signals2::scoped_connection slot;
+       Py::Object py;
+       PyObject* ptr() {
+           return py.ptr();
+       }
+    } Connection;
 
-#define FC_PY_GDOC_OBSERVER \
-    FC_PY_ELEMENT(CreatedDocument,_1) \
-    FC_PY_ELEMENT(DeletedDocument,_1) \
-    FC_PY_ELEMENT(RelabelDocument,_1) \
-    FC_PY_ELEMENT(RenameDocument,_1) \
-    FC_PY_ELEMENT(ActivateDocument,_1) \
-    FC_PY_ELEMENT(CreatedObject,_1) \
-    FC_PY_ELEMENT(DeletedObject,_1) \
-    FC_PY_ELEMENT(ChangedObject,_1,_2) \
-    FC_PY_ELEMENT(InEdit,_1) \
-    FC_PY_ELEMENT(ResetEdit,_1)
-
-#undef FC_PY_ELEMENT
-#define FC_PY_ELEMENT(_name,...) \
-    Connection connect##_name;\
-    Py::Object py##_name;
-
-    FC_PY_GDOC_OBSERVER
+    Connection pyCreatedDocument;
+    Connection pyDeletedDocument;
+    Connection pyRelabelDocument;
+    Connection pyRenameDocument;
+    Connection pyActivateDocument;
+    Connection pyCreatedObject;
+    Connection pyDeletedObject;
+    Connection pyBeforeChangeObject;
+    Connection pyChangedObject;
+    Connection pyInEdit;
+    Connection pyResetEdit;
 };
 
 } //namespace Gui

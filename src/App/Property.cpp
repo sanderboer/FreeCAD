@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2002     *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -130,7 +130,7 @@ const boost::any Property::getPathValue(const ObjectIdentifier &path) const
 
 void Property::getPaths(std::vector<ObjectIdentifier> &paths) const
 {
-    paths.push_back(App::ObjectIdentifier(getContainer(), getName()));
+    paths.emplace_back(getContainer(), getName());
 }
 
 ObjectIdentifier Property::canonicalPath(const ObjectIdentifier &p) const

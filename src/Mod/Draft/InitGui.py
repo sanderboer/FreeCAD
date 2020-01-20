@@ -1,5 +1,4 @@
 # ***************************************************************************
-# *                                                                         *
 # *   Copyright (c) 2009 Yorik van Havre <yorik@uncreated.net>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
@@ -22,7 +21,7 @@
 
 __title__ = "FreeCAD Draft Workbench - Init file"
 __author__ = "Yorik van Havre <yorik@uncreated.net>"
-__url__ = ["http://www.freecadweb.org"]
+__url__ = "https://www.freecadweb.org"
 
 
 class DraftWorkbench(Workbench):
@@ -66,6 +65,8 @@ class DraftWorkbench(Workbench):
         try:
             import os, Draft_rc, DraftTools, DraftGui, DraftFillet
             from DraftTools import translate
+            from draftguitools import gui_circulararray
+            from draftguitools import gui_polararray
             FreeCADGui.addLanguagePath(":/translations")
             FreeCADGui.addIconPath(":/icons")
         except Exception as inst:
@@ -82,10 +83,11 @@ class DraftWorkbench(Workbench):
         self.modList = ["Draft_Move", "Draft_Rotate", "Draft_Offset",
                         "Draft_Trimex", "Draft_Join", "Draft_Split",
                         "Draft_Upgrade", "Draft_Downgrade", "Draft_Scale",
-                        "Draft_Edit", "Draft_SubelementModify",
+                        "Draft_Edit", "Draft_SubelementHighlight",
                         "Draft_WireToBSpline", "Draft_AddPoint",
                         "Draft_DelPoint", "Draft_Shape2DView",
                         "Draft_Draft2Sketch", "Draft_Array", "Draft_LinkArray",
+                        "Draft_PolarArray", "Draft_CircularArray",
                         "Draft_PathArray", "Draft_PathLinkArray", "Draft_PointArray", "Draft_Clone",
                         "Draft_Drawing", "Draft_Mirror", "Draft_Stretch"]
         self.treecmdList = ["Draft_ApplyStyle", "Draft_ToggleDisplayMode",

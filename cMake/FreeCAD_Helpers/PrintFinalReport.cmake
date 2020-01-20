@@ -8,6 +8,10 @@ macro(PrintFinalReport)
         message(STATUS "Build type:          ${CMAKE_BUILD_TYPE}")
     endif()
 
+    message(STATUS "Compiler:            ${CMAKE_CXX_COMPILER} (${CMAKE_CXX_COMPILER_VERSION})")
+    message(STATUS "Flags:               ${CMAKE_CXX_FLAGS}")
+    message(STATUS "Standard:            Requires C++${CMAKE_CXX_STANDARD}")
+
     # Qt5 needs/sets PYTHON_CONFIG_SUFFIX regarding Shiboken
     message(STATUS "Python:              [${PYTHON_EXECUTABLE}] [${PYTHON_CONFIG_SUFFIX}]")
 
@@ -67,7 +71,7 @@ macro(PrintFinalReport)
     endif(DEFINED EIGEN3_FOUND)
 
     if(NOT BUILD_QT5)
-        message(STATUS "Qt4:                 ${Qt4_VERSION}")
+        message(STATUS "Qt4:                 ${QT_VERSION_MAJOR}.${QT_VERSION_MINOR}.${QT_VERSION_PATCH}")
         if(QT_QTWEBKIT_FOUND)
             message(STATUS "QtWebKit:            found")
         else(QT_QTWEBKIT_FOUND)
@@ -230,6 +234,18 @@ macro(PrintFinalReport)
                             "Copying libpack 'bin' directory to build directory.\n")
                     file(COPY ${FREECAD_LIBPACK_DIR}/bin DESTINATION ${CMAKE_BINARY_DIR})
                     message("... done copying libpack 'bin' directory.\n=======================================\n")
+                endif()
+                if(FREECAD_COPY_PLUGINS_BIN_TO_BUILD)
+                    message(STATUS "=======================================\n"
+                                   "Copying plugins to build directory.")
+                    file(COPY ${FREECAD_LIBPACK_DIR}/plugins/imageformats DESTINATION ${CMAKE_BINARY_DIR}/bin)
+                    file(COPY ${FREECAD_LIBPACK_DIR}/plugins/platforms DESTINATION ${CMAKE_BINARY_DIR}/bin)
+                    file(COPY ${FREECAD_LIBPACK_DIR}/plugins/styles DESTINATION ${CMAKE_BINARY_DIR}/bin)
+                    file(COPY ${FREECAD_LIBPACK_DIR}/bin/QtWebEngineProcess.exe DESTINATION ${CMAKE_BINARY_DIR}/bin)
+                    file(COPY ${FREECAD_LIBPACK_DIR}/bin/QtWebEngineProcessd.exe DESTINATION ${CMAKE_BINARY_DIR}/bin)
+                    file(COPY ${FREECAD_LIBPACK_DIR}/translations/qtwebengine_locales DESTINATION ${CMAKE_BINARY_DIR}/translations)
+                    file(COPY ${FREECAD_LIBPACK_DIR}/resources DESTINATION ${CMAKE_BINARY_DIR})
+                    file(WRITE ${CMAKE_BINARY_DIR}/bin/qt.conf "[Paths]\nPrefix=..\n")
                 endif()
             endif()
 

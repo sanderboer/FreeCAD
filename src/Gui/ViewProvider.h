@@ -128,10 +128,10 @@ public:
     virtual ~ViewProvider();
 
     // returns the root node of the Provider (3D)
-    virtual SoSeparator* getRoot(void){return pcRoot;}
+    virtual SoSeparator* getRoot(void) const {return pcRoot;}
     // return the mode switch node of the Provider (3D)
-    SoSwitch *getModeSwitch(void){return pcModeSwitch;}
-    SoTransform *getTransformNode(){return pcTransform;}
+    SoSwitch *getModeSwitch(void) const {return pcModeSwitch;}
+    SoTransform *getTransformNode() const {return pcTransform;}
     // returns the root for the Annotations.
     SoSeparator* getAnnotation(void);
     // returns the root node of the Provider (3D)
@@ -470,7 +470,9 @@ public:
     static Base::Matrix4D convert(const SbMatrix &sbMat);
     //@}
 
-    virtual MDIView *getMDIView() {return 0;}
+    virtual MDIView *getMDIView() const {
+        return nullptr;
+    }
 
 public:
     // this method is called by the viewer when the ViewProvider is in edit
@@ -519,6 +521,8 @@ protected:
      */
     SoPickedPoint* getPointOnRay(const SbVec3f& pos, const SbVec3f& dir,
                                  const View3DInventorViewer* viewer) const;
+    /// Reimplemented from subclass
+    void onBeforeChange(const App::Property* prop);
     /// Reimplemented from subclass
     void onChanged(const App::Property* prop);
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) 2004 Juergen Riegel <juergen.riegel@web.de>             *
+ *   Copyright (c) 2004 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -1748,27 +1748,34 @@ void Application::runApplication(void)
     std::map<std::string,std::string>::const_iterator it;
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 9, 0))
-    QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
-#endif
-
-    // A new QApplication
-    Base::Console().Log("Init: Creating Gui::Application and QApplication\n");
-
-#if defined(QTWEBENGINE) && defined(Q_OS_LINUX)
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+#elif defined(QTWEBENGINE) && defined(Q_OS_LINUX)
     // Avoid warning of 'Qt WebEngine seems to be initialized from a plugin...'
     // QTWEBENGINE is defined in src/Gui/CMakeLists.txt, currently only enabled
     // when build with Conda.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 #endif
 
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 12, 0))
+    QCoreApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
+#endif
+#if QT_VERSION >= 0x050600
+    //Enable automatic scaling based on pixel density of display (added in Qt 5.6)
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+#endif
+#if QT_VERSION >= 0x050100
+    //Enable support for highres images (added in Qt 5.1, but off by default)
+    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#endif
+
+    // A new QApplication
+    Base::Console().Log("Init: Creating Gui::Application and QApplication\n");
+
     // if application not yet created by the splasher
     int argc = App::Application::GetARGC();
     GUISingleApplication mainApp(argc, App::Application::GetARGV());
     // http://forum.freecadweb.org/viewtopic.php?f=3&t=15540
     mainApp.setAttribute(Qt::AA_DontShowIconsInMenus, false);
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 12, 0))
-    mainApp.setAttribute(Qt::AA_UseDesktopOpenGL);
-#endif
 
 #ifdef Q_OS_UNIX
     // Make sure that we use '.' as decimal point. See also
@@ -1805,14 +1812,6 @@ void Application::runApplication(void)
         return;
     }
 
-#if QT_VERSION >= 0x050600
-    //Enable automatic scaling based on pixel density of display (added in Qt 5.6)
-    mainApp.setAttribute(Qt::AA_EnableHighDpiScaling);
-#endif
-#if QT_VERSION >= 0x050100
-    //Enable support for highres images (added in Qt 5.1, but off by default)
-    mainApp.setAttribute(Qt::AA_UseHighDpiPixmaps);
-#endif
     // set application icon and window title
     it = cfg.find("Application");
     if (it != cfg.end()) {

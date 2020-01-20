@@ -49,20 +49,22 @@ typedef std::shared_ptr<DocumentObjectData> DocumentObjectDataPtr;
 class DocumentItem;
 
 /// highlight modes for the tree items
-enum HighlightMode {  Underlined,
-                      Italic,
-                      Overlined,
-                      Bold,
-                      Blue,
-                      LightBlue,
-                      UserDefined
+enum class HighlightMode {
+    Underlined,
+    Italic,
+    Overlined,
+    Bold,
+    Blue,
+    LightBlue,
+    UserDefined
 };
 
 /// highlight modes for the tree items
-enum TreeItemMode {  ExpandItem,
-                     ExpandPath,
-                     CollapseItem,
-                     ToggleItem
+enum class TreeItemMode {
+    ExpandItem,
+    ExpandPath,
+    CollapseItem,
+    ToggleItem
 };
 
 
@@ -105,6 +107,8 @@ public:
 
     void markItem(const App::DocumentObject* Obj,bool mark);
     void syncView(ViewProviderDocumentObject *vp);
+
+    virtual void selectAll() override;
 
     const char *getTreeName() const;
 
@@ -417,7 +421,7 @@ public:
     // subname in selection
     int getSubName(std::ostringstream &str, App::DocumentObject *&topParent) const;
 
-    void setHighlight(bool set, Gui::HighlightMode mode = Gui::LightBlue);
+    void setHighlight(bool set, HighlightMode mode = HighlightMode::LightBlue);
 
     const char *getName() const;
     const char *getTreeName() const;

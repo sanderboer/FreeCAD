@@ -89,6 +89,7 @@ def setup(doc=None, solvertype="ccxtools"):
         )[0]
         solver_object.WorkingDir = u""
     if solvertype == "calculix" or solvertype == "ccxtools":
+        solver_object.SplitInputWriter = False
         solver_object.AnalysisType = "static"
         solver_object.GeometricalNonlinearity = "linear"
         solver_object.ThermoMechSteadyState = False
@@ -156,7 +157,7 @@ def setup(doc=None, solvertype="ccxtools"):
 
 
 """
-from femexamples import material_multiple_twoboxes as twoboxes
-twoboxes.setup()
+from femexamples.material_multiple_twoboxes import setup
+setup()
 
 """

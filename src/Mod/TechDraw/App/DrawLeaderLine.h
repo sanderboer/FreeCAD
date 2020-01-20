@@ -44,7 +44,7 @@ public:
 
     App::PropertyLink         LeaderParent;
     App::PropertyVectorList   WayPoints;
-    App::PropertyInteger      StartSymbol;
+    App::PropertyInteger      StartSymbol;          //see Gui/QGIArrow for values
     App::PropertyInteger      EndSymbol;
     App::PropertyBool         Scalable;
     App::PropertyBool         AutoHorizontal;
@@ -63,6 +63,7 @@ public:
     virtual App::DocumentObject* getBaseObject(void) const;
     bool keepUpdated(void);
     double getScale(void) const override;
+    double getBaseScale(void) const;
     void adjustLastSegment(void);
     bool getDefAuto(void) const;
 

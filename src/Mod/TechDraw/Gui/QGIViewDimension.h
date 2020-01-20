@@ -88,11 +88,13 @@ public:
 
     QGCustomText* getDimText(void) { return m_dimText; }
     void setDimText(QGCustomText* newText) { m_dimText = newText; }
-    QGCustomText* getTolText(void) { return m_tolText; }
-    void setTolText(QGCustomText* newTol) { m_tolText = newTol; }
+    QGCustomText* getTolTextOver(void) { return m_tolTextOver; }
+    void setTolTextOver(QGCustomText* newTol) { m_tolTextOver = newTol; }
+    QGCustomText* getTolTextUnder(void) { return m_tolTextUnder; }
+    void setTolTextUnder(QGCustomText* newTol) { m_tolTextOver = newTol; }
 
     double getTolAdjust(void);
-    bool hasHover;
+/*    bool hasHover;*/
 
     bool isFramed(void) { return m_isFramed; }
     void setFramed(bool framed) { m_isFramed = framed; }
@@ -101,6 +103,7 @@ public:
     void setLineWidth(double lineWidth) { m_lineWidth = lineWidth; }
 
 Q_SIGNALS:
+    void setPretty(int state);
     void dragging(bool);
     void hover(bool state);
     void selected(bool state);
@@ -115,7 +118,8 @@ protected:
 //    virtual void mouseReleaseEvent( QGraphicsSceneMouseEvent * event) override;
 
     QGCustomText* m_dimText;
-    QGCustomText* m_tolText;
+    QGCustomText* m_tolTextOver;
+    QGCustomText* m_tolTextUnder;
     QGCustomText* m_unitText;
     int getPrecision(void);
     QColor m_colNormal;
@@ -151,14 +155,19 @@ public:
 
     virtual void drawBorder() override;
     virtual void updateView(bool update = false) override;
-    virtual QColor getNormalColor(void) override;
+    virtual QColor prefNormalColor(void);
     QString getLabelText(void);
     void setPrettyPre(void);
     void setPrettySel(void);
     void setPrettyNormal(void);
 
+    virtual void setGroupSelection(bool b) override;
+    virtual QGIDatumLabel* getDatumLabel(void) { return datumLabel; }
+
+    void setNormalColorAll(void);
 
 public Q_SLOTS:
+    void onPrettyChanged(int state);
     void datumLabelDragged(bool ctrl);
     void datumLabelDragFinished(void);
     void select(bool state);
@@ -240,8 +249,9 @@ protected:
     Base::Vector3d findIsoDir(Base::Vector3d ortho);
     Base::Vector3d findIsoExt(Base::Vector3d isoDir);
     QString getPrecision(void);
-    
-protected:
+
+    virtual void mouseReleaseEvent( QGraphicsSceneMouseEvent * event) override;
+
     bool hasHover;
     QGIDatumLabel* datumLabel;                                         //dimension text
     QGIDimLines* dimLines;                                       //dimension lines + extension lines
@@ -261,9 +271,9 @@ private:
                              { return QRectF(Rez::guiX(r.MinX), -Rez::guiX(r.MaxY),
                                              Rez::guiX(r.Width()), Rez::guiX(r.Height())); }
 
-    static inline double toDeg(double a) { return a*180/M_PI; }
-    static inline double toQtRad(double a) { return -a; }
-    static inline double toQtDeg(double a) { return -a*180.0/M_PI; }
+    static double toDeg(double a);
+    static double toQtRad(double a);
+    static double toQtDeg(double a);
 
     double getDefaultExtensionLineOverhang() const;
     double getDefaultArrowTailLength() const;
@@ -271,6 +281,8 @@ private:
     double getDefaultIsoReferenceLineOverhang() const;
     double getDefaultAsmeHorizontalLeaderLength() const;
     double getDefaultAsmeExtensionLineGap() const;
+
+/*    QGIView* m_parent;      //for edit dialog set up eventually*/
 
 };
 

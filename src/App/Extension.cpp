@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Stefan Tröger          (stefantroeger@gmx.net) 2016     *
+ *   Copyright (c) 2016 Stefan Tröger <stefantroeger@gmx.net>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -111,7 +111,7 @@ std::string Extension::name() const {
         throw Base::RuntimeError("Extension::name: Extension type not set");
     
     std::string temp(m_extensionType.getName());
-    std::string::size_type pos = temp.find_last_of(":");
+    std::string::size_type pos = temp.find_last_of(':');
 
     if(pos != std::string::npos)
         return temp.substr(pos+1);

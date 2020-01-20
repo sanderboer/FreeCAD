@@ -1,7 +1,5 @@
 #***************************************************************************
-#*                                                                         *
-#*   Copyright (c) 2011                                                    *
-#*   Yorik van Havre <yorik@uncreated.net>                                 *
+#*   Copyright (c) 2011 Yorik van Havre <yorik@uncreated.net>              *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
 #*   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -90,7 +88,7 @@ def makeWindow(baseobj=None,width=None,height=None,parts=None,name="Window"):
         obj.WindowParts = parts
     else:
         if baseobj:
-            if baseobj.isDerivedFrom("Part::Part2DObject"):
+            if baseobj.getLinkedObject().isDerivedFrom("Part::Part2DObject"):
                 if baseobj.Shape.Wires:
                     i = 0
                     ws = ''
@@ -620,7 +618,7 @@ class _CommandWindow:
         if FreeCADGui.Selection.getSelectionEx():
             FreeCADGui.draftToolBar.offUi()
             obj = self.sel[0]
-            if obj.isDerivedFrom("Part::Feature"):
+            if hasattr(obj,'Shape'):
                 if obj.Shape.Wires and (not obj.Shape.Solids) and (not obj.Shape.Shells):
                     FreeCADGui.Control.closeDialog()
                     host = None
@@ -1254,7 +1252,7 @@ class _Window(ArchComponent.Component):
         self.sshapes = []
         self.vshapes = []
         if obj.Base:
-            if obj.Base.isDerivedFrom("Part::Feature"):
+            if hasattr(obj,'Shape'):
                 if hasattr(obj,"WindowParts"):
                     if obj.WindowParts and (len(obj.WindowParts)%5 == 0):
                         shapes = self.buildShapes(obj)
@@ -1299,7 +1297,7 @@ class _Window(ArchComponent.Component):
         # check if we have a custom subvolume
         if hasattr(obj,"Subvolume"):
             if obj.Subvolume:
-                if obj.Subvolume.isDerivedFrom("Part::Feature"):
+                if hasattr(obj.Subvolume,'Shape'):
                     if not obj.Subvolume.Shape.isNull():
                         sh = obj.Subvolume.Shape.copy()
                         if plac:
@@ -1711,11 +1709,11 @@ class _ArchWindowTaskPanel:
     def getIcon(self,obj):
 
         if hasattr(obj.ViewObject,"Proxy"):
-            return QtGui.QIcon(obj.ViewObject.Proxy.getIcon())
-        elif obj.isDerivedFrom("Sketcher::SketchObject"):
+            if hasattr(obj.ViewObject.Proxy,"getIcon"):
+                return QtGui.QIcon(obj.ViewObject.Proxy.getIcon())
+        if obj.isDerivedFrom("Sketcher::SketchObject"):
             return QtGui.QIcon(":/icons/Sketcher_Sketch.svg")
-        else:
-            return QtGui.QIcon(":/icons/Tree_Part.svg")
+        return QtGui.QIcon(":/icons/Tree_Part.svg")
 
     def update(self):
 
@@ -1729,7 +1727,7 @@ class _ArchWindowTaskPanel:
                 item = QtGui.QTreeWidgetItem(self.tree)
                 item.setText(0,self.obj.Base.Name)
                 item.setIcon(0,self.getIcon(self.obj.Base))
-                if self.obj.Base.isDerivedFrom("Part::Feature"):
+                if hasattr(self.obj.Base,'Shape'):
                     i = 0
                     for w in self.obj.Base.Shape.Wires:
                         if w.isClosed():

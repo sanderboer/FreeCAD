@@ -129,7 +129,7 @@ double Toolpath::getLength()
     Vector3d next;
     for(std::vector<Command*>::const_iterator it = vpcCommands.begin();it!=vpcCommands.end();++it) {
         std::string name = (*it)->Name;
-        next = (*it)->getPlacement().getPosition();
+        next = (*it)->getPlacement(last).getPosition();
         if ( (name == "G0") || (name == "G00") || (name == "G1") || (name == "G01") ) {
             // straight line
             l += (next - last).Length();
@@ -261,7 +261,7 @@ void Toolpath::setFromGCode(const std::string instr)
             }
             mode = "comment";
             last = found;
-            found = str.find_first_of(")", found+1);
+            found = str.find_first_of(')', found+1);
         } else if (str[found] == ')') {
             // end of comment
             std::string gcodestr = str.substr(last, found-last+1);

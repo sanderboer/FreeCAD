@@ -96,6 +96,7 @@ def setup(doc=None, solvertype="ccxtools"):
         )[0]
         solver.WorkingDir = u""
     if solvertype == "calculix" or solvertype == "ccxtools":
+        solver.SplitInputWriter = False
         solver.AnalysisType = "static"
         solver.GeometricalNonlinearity = "linear"
         solver.ThermoMechSteadyState = False
@@ -156,7 +157,7 @@ def setup(doc=None, solvertype="ccxtools"):
 
 
 """
-from femexamples import material_nl_platewithhole as nlmat
-nlmat.setup()
+from femexamples.material_nl_platewithhole import setup
+setup()
 
 """

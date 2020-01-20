@@ -1,7 +1,5 @@
 # ***************************************************************************
-# *                                                                         *
-# *   Copyright (c) 2019                                                    *
-# *   Yorik van Havre <yorik@uncreated.net>                                 *
+# *   Copyright (c) 2019 Yorik van Havre <yorik@uncreated.net>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -433,7 +431,7 @@ def buildRelProperties(ifcfile):
 
 
 def getIfcPropertySets(ifcfile, pid):
-    """Returns a dicionary of {pset_id:[prop_id, prop_id...]} for an IFC object"""
+    """Returns a dictionary of {pset_id:[prop_id, prop_id...]} for an IFC object"""
 
     # get psets for this pid
     psets = {}

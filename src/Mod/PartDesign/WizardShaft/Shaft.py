@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #/******************************************************************************
-# *   Copyright (c)2012 Jan Rheinlaender <jrheinlaender@users.sourceforge.net> *
+# *   Copyright (c) 2012 Jan Rheinländer <jrheinlaender@users.sourceforge.net> *
 # *                                                                            *
 # *   This file is part of the FreeCAD CAx development system.                 *
 # *                                                                            *
@@ -88,7 +88,7 @@ class Shaft:
         # We don't call equilibrium() here because the new segment has no constraints defined yet
         # Fix face reference of fixed segment if it is the last one
         for i in range(1,  len(self.segments)):
-            if self.segments[i].constraintType is not "Fixed":
+            if self.segments[i].constraintType != "Fixed":
                 continue
             if i == len(self.segments) - 1:
                 self.segments[index].constraint.References = [( self.feature.feature,  "Face%u" % (2 * (index+1) + 1) )]

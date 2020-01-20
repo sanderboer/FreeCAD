@@ -1,7 +1,5 @@
 #***************************************************************************
-#*                                                                         *
-#*   Copyright (c) 2011                                                    *  
-#*   Yorik van Havre <yorik@uncreated.net>                                 *  
+#*   Copyright (c) 2011 Yorik van Havre <yorik@uncreated.net>              *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
 #*   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -23,7 +21,7 @@
 
 __title__="FreeCAD Draft Trackers"
 __author__ = "Yorik van Havre"
-__url__ = "http://www.freecadweb.org"
+__url__ = "https://www.freecadweb.org"
 
 ## @package DraftTrackers
 #  \ingroup DRAFT
@@ -719,19 +717,19 @@ class editTracker(Tracker):
         self.coords = coin.SoCoordinate3() # this is the coordinate
         self.coords.point.setValue((pos.x,pos.y,pos.z))
         if inactive:
-            selnode = coin.SoSeparator()
+            self.selnode = coin.SoSeparator()
         else:
-            selnode = coin.SoType.fromName("SoFCSelection").createInstance()
+            self.selnode = coin.SoType.fromName("SoFCSelection").createInstance()
             if name:
-                selnode.useNewSelection = False
-                selnode.documentName.setValue(FreeCAD.ActiveDocument.Name)
-                selnode.objectName.setValue(name)
-                selnode.subElementName.setValue("EditNode"+str(idx))
+                self.selnode.useNewSelection = False
+                self.selnode.documentName.setValue(FreeCAD.ActiveDocument.Name)
+                self.selnode.objectName.setValue(name)
+                self.selnode.subElementName.setValue("EditNode"+str(idx))
         node = coin.SoAnnotation()
-        selnode.addChild(self.coords)
-        selnode.addChild(self.color)
-        selnode.addChild(self.marker)
-        node.addChild(selnode)
+        self.selnode.addChild(self.coords)
+        self.selnode.addChild(self.color)
+        self.selnode.addChild(self.marker)
+        node.addChild(self.selnode)
         ontop = not inactive
         Tracker.__init__(self,children=[node],ontop=ontop,name="editTracker")
         self.on()
@@ -742,6 +740,20 @@ class editTracker(Tracker):
     def get(self):
         p = self.coords.point.getValues()[0]
         return Vector(p[0],p[1],p[2])
+
+    def get_doc_name(self):
+        return str(self.selnode.documentName.getValue())
+
+    def get_obj_name(self):
+        return str(self.selnode.objectName.getValue())
+
+    def get_subelement_name(self):
+        return str(self.selnode.subElementName.getValue())
+
+    def get_subelement_index(self):
+        subElement = self.get_subelement_name()
+        idx = int(subElement[8:])
+        return idx
 
     def move(self,delta):
         self.set(self.get().add(delta))

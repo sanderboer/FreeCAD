@@ -139,6 +139,18 @@ struct Color_Less  : public std::binary_function<const App::Color&,
 
 // --------------------------------------------------------------
 
+std::vector<std::string> MeshInput::supportedMeshFormats()
+{
+    std::vector<std::string> fmt;
+    fmt.emplace_back("bms");
+    fmt.emplace_back("ply");
+    fmt.emplace_back("stl");
+    fmt.emplace_back("obj");
+    fmt.emplace_back("off");
+    fmt.emplace_back("smf");
+    return fmt;
+}
+
 bool MeshInput::LoadAny(const char* FileName)
 {
     // ask for read permission
@@ -378,7 +390,7 @@ bool MeshInput::LoadOBJ (std::istream &rstrIn)
         }
         else if (boost::regex_match(line.c_str(), what, rx_u)) {
             if (!materialName.empty()) {
-                _materialNames.push_back(std::make_pair(materialName, countMaterialFacets));
+                _materialNames.emplace_back(materialName, countMaterialFacets);
             }
             materialName = Base::Tools::escapedUnicodeToUtf8(what[1].first);
             countMaterialFacets = 0;
@@ -441,7 +453,7 @@ bool MeshInput::LoadOBJ (std::istream &rstrIn)
 
     // Add the last added material name
     if (!materialName.empty()) {
-        _materialNames.push_back(std::make_pair(materialName, countMaterialFacets));
+        _materialNames.emplace_back(materialName, countMaterialFacets);
     }
 
     // now get back the colors from the vertex property
@@ -679,7 +691,7 @@ bool MeshInput::LoadOFF (std::istream &rstrIn)
                     float fg = static_cast<float>(g)/255.0f;
                     float fb = static_cast<float>(b)/255.0f;
                     float fa = static_cast<float>(a)/255.0f;
-                    _material->diffuseColor.push_back(App::Color(fr, fg, fb, fa));
+                    _material->diffuseColor.emplace_back(fr, fg, fb, fa);
                 }
                 meshPoints.push_back(MeshPoint(Base::Vector3f(fX, fY, fZ)));
                 cntPoints++;
@@ -893,7 +905,7 @@ bool MeshInput::LoadPLY (std::istream &inp)
                 }
 
                 // store the property name and type
-                vertex_props.push_back(std::make_pair(name, number));
+                vertex_props.emplace_back(name, number);
             }
             else if (element == "face") {
                 std::string list, uchr;
@@ -1064,7 +1076,7 @@ bool MeshInput::LoadPLY (std::istream &inp)
                 float r = (prop_values["red"]) / 255.0f;
                 float g = (prop_values["green"]) / 255.0f;
                 float b = (prop_values["blue"]) / 255.0f;
-                _material->diffuseColor.push_back(App::Color(r, g, b));
+                _material->diffuseColor.emplace_back(r, g, b);
             }
         }
 
@@ -1146,7 +1158,7 @@ bool MeshInput::LoadPLY (std::istream &inp)
                 float r = (prop_values["red"]) / 255.0f;
                 float g = (prop_values["green"]) / 255.0f;
                 float b = (prop_values["blue"]) / 255.0f;
-                _material->diffuseColor.push_back(App::Color(r, g, b));
+                _material->diffuseColor.emplace_back(r, g, b);
             }
         }
 
@@ -1624,7 +1636,7 @@ bool MeshInput::LoadNastran (std::istream &rstrIn)
         if (line.find("GRID*") == 0) {
             assert(0);
         }
-        else if (line.find("*") == 0) {
+        else if (line.find('*') == 0) {
             assert(0);
         }
         // insert the read-in vertex into a map to preserve the order
@@ -1745,6 +1757,22 @@ void MeshOutput::Transform(const Base::Matrix4D& mat)
     _transform = mat;
     if (mat != Base::Matrix4D())
         apply_transform = true;
+}
+
+std::vector<std::string> MeshOutput::supportedMeshFormats()
+{
+    std::vector<std::string> fmt;
+    fmt.emplace_back("bms");
+    fmt.emplace_back("ply");
+    fmt.emplace_back("stl");
+    fmt.emplace_back("obj");
+    fmt.emplace_back("off");
+    fmt.emplace_back("smf");
+    fmt.emplace_back("x3d");
+    fmt.emplace_back("wrl");
+    fmt.emplace_back("wrz");
+    fmt.emplace_back("amf");
+    return fmt;
 }
 
 MeshIO::Format MeshOutput::GetFormat(const char* FileName)

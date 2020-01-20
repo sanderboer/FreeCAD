@@ -41,6 +41,7 @@
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
+#include <gp_Elips.hxx>
 #include <Precision.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepAdaptor_Curve.hxx>
@@ -52,6 +53,7 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
 #include <GProp_GProps.hxx>
 #include <GeomLProp_SLProps.hxx>
 #include <BRepAdaptor_Surface.hxx>
@@ -388,7 +390,7 @@ Base::Vector3d DrawUtil::toR3(const gp_Ax2 fromSystem, const Base::Vector3d from
     return toPoint;
 }
 
-//! check if two vectors are parallel
+//! check if two vectors are parallel. Vectors don't have to be unit vectors
 bool DrawUtil::checkParallel(const Base::Vector3d v1, Base::Vector3d v2, double tolerance)
 {
     bool result = false;
@@ -640,6 +642,69 @@ PyObject* DrawUtil::colorToPyTuple(App::Color color)
 
     return pTuple;
 }
+
+//check for crazy edge.  This is probably a geometry error of some sort.
+bool  DrawUtil::isCrazy(TopoDS_Edge e)
+{
+    bool result = false;
+    double ratio = 1.0;
+
+    if (e.IsNull()) {
+        result = true;
+        return result;
+    }
+
+    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp")->
+                                                    GetGroup("Preferences")->GetGroup("Mod/TechDraw/debug");
+    bool crazyOK = hGrp->GetBool("allowCrazyEdge", true);
+    if (crazyOK) {
+        return false;
+    }
+
+    BRepAdaptor_Curve adapt(e);
+
+    double edgeLength = GCPnts_AbscissaPoint::Length(adapt, Precision::Confusion());
+    if (edgeLength < 0.00001) {    //edge is scaled.  this is 0.00001 mm on paper
+        Base::Console().Log("DU::isCrazy - edge crazy short: %.7f\n", edgeLength);
+        result = true;
+        return result;
+    }
+    if (edgeLength > 9999.9) { //edge is scaled. this is 10 m on paper.  can't be right? 
+        Base::Console().Log("DU::isCrazy - edge crazy long: %.3f\n", edgeLength);
+        result = true;
+        return result;
+    }
+
+    double start = BRepLProp_CurveTool::FirstParameter(adapt);
+    double end = BRepLProp_CurveTool::LastParameter(adapt);
+    BRepLProp_CLProps propStart(adapt,start,0,Precision::Confusion());
+    const gp_Pnt& vStart = propStart.Value();
+    BRepLProp_CLProps propEnd(adapt,end,0,Precision::Confusion());
+    const gp_Pnt& vEnd = propEnd.Value();
+    double distance = vStart.Distance(vEnd);
+    if (adapt.GetType() == GeomAbs_BSplineCurve) {
+        if (distance > 0.001)  {   // not a closed loop
+            ratio = edgeLength / distance;
+            if (ratio > 9999.9) {   // 10,000x
+                result = true;                         //this is crazy edge
+            }
+        }
+    } else if (adapt.GetType() == GeomAbs_Ellipse) {
+        gp_Elips ellp = adapt.Ellipse();
+        double major = ellp.MajorRadius();
+        double minor = ellp.MinorRadius();
+        if (minor < 0.001) {             //too narrow
+            Base::Console().Log("DU::isCrazy - ellipse is crazy narrow: %.7f\n", minor);
+            result = true;
+        } else if (major > 9999.9) {     //too big
+            Base::Console().Log("DU::isCrazy - ellipse is crazy wide: %.3f\n", major);
+            result = true;
+        }
+    }
+
+//    Base::Console().Message("DU::isCrazy - returns: %d ratio: %.3f\n", result, ratio);
+    return result;
+} 
 
 // Supplementary mathematical functions
 // ====================================
@@ -1037,6 +1102,17 @@ void DrawUtil::countEdges(const char* text, const TopoDS_Shape& s)
     Base::Console().Message("COUNT - %s has %d edges\n",text,num);
 }
 
+void DrawUtil::dumpEdges(const char* text, const TopoDS_Shape& s)
+{
+    Base::Console().Message("DUMP - %s\n",text);
+    TopExp_Explorer expl(s, TopAbs_EDGE);
+    int i;
+    for (i = 1 ; expl.More(); expl.Next(),i++) {
+        const TopoDS_Edge& e = TopoDS::Edge(expl.Current());
+        dumpEdge("dumpEdges", i, e);
+    }
+}
+
 void DrawUtil::dump1Vertex(const char* text, const TopoDS_Vertex& v)
 {
     Base::Console().Message("DUMP - dump1Vertex - %s\n",text);
@@ -1055,9 +1131,13 @@ void DrawUtil::dumpEdge(const char* label, int i, TopoDS_Edge e)
     const gp_Pnt& vEnd = propEnd.Value();
     //Base::Console().Message("%s edge:%d start:(%.3f,%.3f,%.3f)/%0.3f end:(%.2f,%.3f,%.3f)/%.3f\n",label,i,
     //                        vStart.X(),vStart.Y(),vStart.Z(),start,vEnd.X(),vEnd.Y(),vEnd.Z(),end);
-    Base::Console().Message("%s edge:%d start:(%.3f,%.3f,%.3f)  end:(%.2f,%.3f,%.3f)\n",label,i,
-                            vStart.X(),vStart.Y(),vStart.Z(),vEnd.X(),vEnd.Y(),vEnd.Z());
+    Base::Console().Message("%s edge:%d start:(%.3f,%.3f,%.3f)  end:(%.2f,%.3f,%.3f) Orient: %d\n",label,i,
+                            vStart.X(),vStart.Y(),vStart.Z(),vEnd.X(),vEnd.Y(),vEnd.Z(), e.Orientation());
+    double edgeLength = GCPnts_AbscissaPoint::Length(adapt, Precision::Confusion());
+    Base::Console().Message(">>>>>>> length: %.3f  distance: %.3f ration: %.3f type: %d\n", edgeLength,
+                            vStart.Distance(vEnd), edgeLength / vStart.Distance(vEnd), adapt.GetType());
 }
+
 const char* DrawUtil::printBool(bool b)
 {
     return (b ? "True" : "False");
@@ -1085,7 +1165,23 @@ void DrawUtil::dumpCS(const char* text,
     gp_Dir baseAxis = CS.Direction();
     gp_Dir baseX    = CS.XDirection();
     gp_Dir baseY    = CS.YDirection();
-    Base::Console().Message("DU::dumpCSDVS - %s Axis: %s X: %s Y: %s\n", text,
+    gp_Pnt baseOrg  = CS.Location();
+    Base::Console().Message("DU::dumpCS - %s Loc: %s Axis: %s X: %s Y: %s\n", text,
+                            DrawUtil::formatVector(baseOrg).c_str(),
+                            DrawUtil::formatVector(baseAxis).c_str(),
+                            DrawUtil::formatVector(baseX).c_str(),
+                            DrawUtil::formatVector(baseY).c_str());
+}
+
+void DrawUtil::dumpCS3(const char* text,
+                       gp_Ax3 CS)
+{
+    gp_Dir baseAxis = CS.Direction();
+    gp_Dir baseX    = CS.XDirection();
+    gp_Dir baseY    = CS.YDirection();
+    gp_Pnt baseOrg  = CS.Location();
+    Base::Console().Message("DU::dumpCSF - %s Loc: %s Axis: %s X: %s Y: %s\n", text,
+                            DrawUtil::formatVector(baseOrg).c_str(),
                             DrawUtil::formatVector(baseAxis).c_str(),
                             DrawUtil::formatVector(baseX).c_str(),
                             DrawUtil::formatVector(baseY).c_str());

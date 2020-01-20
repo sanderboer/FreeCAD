@@ -1,5 +1,4 @@
 # ***************************************************************************
-# *                                                                         *
 # *   Copyright (c) 2016 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
@@ -173,6 +172,14 @@ class _FemMeshGmsh():
             "Geometrical Tolerance (0.0 = GMSH std = 1e-08)"
         )
         obj.GeometryTolerance = 1e-06
+
+        obj.addProperty(
+            "App::PropertyBool",
+            "SecondOrderLinear",
+            "FEM Gmsh Mesh Params",
+            "Second order nodes are created by linear interpolation"
+        )
+        obj.SecondOrderLinear = True
 
         obj.addProperty(
             "App::PropertyEnumeration",

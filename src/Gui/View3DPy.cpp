@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2002     *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -113,7 +113,7 @@ void View3DInventorPy::init_type()
     add_varargs_method("stopAnimating",&View3DInventorPy::stopAnimating,"stopAnimating()");
     add_varargs_method("setAnimationEnabled",&View3DInventorPy::setAnimationEnabled,"setAnimationEnabled()");
     add_varargs_method("isAnimationEnabled",&View3DInventorPy::isAnimationEnabled,"isAnimationEnabled()");
-    add_varargs_method("dump",&View3DInventorPy::dump,"dump()");
+    add_varargs_method("dump",&View3DInventorPy::dump,"dump(filename, [onlyVisible=False])");
     add_varargs_method("dumpNode",&View3DInventorPy::dumpNode,"dumpNode(node)");
     add_varargs_method("setStereoType",&View3DInventorPy::setStereoType,"setStereoType()");
     add_varargs_method("getStereoType",&View3DInventorPy::getStereoType,"getStereoType()");
@@ -953,8 +953,9 @@ Py::Object View3DInventorPy::saveImage(const Py::Tuple& args)
 {
     char *cFileName,*cColor="Current",*cComment="$MIBA";
     int w=-1,h=-1;
+    int s=View3DInventorViewer::getNumSamples();
 
-    if (!PyArg_ParseTuple(args.ptr(), "et|iiss","utf-8",&cFileName,&w,&h,&cColor,&cComment))
+    if (!PyArg_ParseTuple(args.ptr(), "et|iissi","utf-8",&cFileName,&w,&h,&cColor,&cComment,&s))
         throw Py::Exception();
 
     std::string encodedName = std::string(cFileName);
@@ -972,7 +973,7 @@ Py::Object View3DInventorPy::saveImage(const Py::Tuple& args)
         bg.setNamedColor(colname);
 
     QImage img;
-    _view->getViewer()->savePicture(w, h, 8, bg, img);
+    _view->getViewer()->savePicture(w, h, s, bg, img);
 
     SoFCOffscreenRenderer& renderer = SoFCOffscreenRenderer::instance();
     SoCamera* cam = _view->getViewer()->getSoRenderManager()->getCamera();
@@ -1232,11 +1233,12 @@ Py::Object View3DInventorPy::listCameraTypes(const Py::Tuple& args)
 Py::Object View3DInventorPy::dump(const Py::Tuple& args)
 {
     char* filename;
-    if (!PyArg_ParseTuple(args.ptr(), "s", &filename))
+    PyObject *onlyVisible = Py_False;
+    if (!PyArg_ParseTuple(args.ptr(), "s|O", &filename, &onlyVisible))
         throw Py::Exception();
 
     try {
-        _view->dump(filename);
+        _view->dump(filename, PyObject_IsTrue(onlyVisible));
         return Py::None();
     }
     catch (const Base::Exception& e) {

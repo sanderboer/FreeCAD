@@ -1,5 +1,5 @@
 /***************************************************************************
- *   (c) Jürgen Riegel (juergen.riegel@web.de) 2002                        *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -19,7 +19,6 @@
  *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
  *   USA                                                                   *
  *                                                                         *
- *   Juergen Riegel 2002                                                   *
  ***************************************************************************/
 
 
@@ -792,7 +791,7 @@ int getSWIGVersionFromModule(const std::string& module)
             Py::String file(mod.getAttr("__file__"));
             std::string filename = (std::string)file;
             // file can have the extension .py or .pyc
-            filename = filename.substr(0, filename.rfind("."));
+            filename = filename.substr(0, filename.rfind('.'));
             filename += ".py";
             boost::regex rx("^# Version ([1-9])\\.([0-9])\\.([0-9]+)");
             boost::cmatch what;

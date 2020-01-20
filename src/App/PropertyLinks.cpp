@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2002     *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -1781,7 +1781,7 @@ void PropertyLinkSubList::setValue(DocumentObject* lValue, const std::vector<str
     if (size == 0) {
         if (lValue) {
             this->_lValueList.push_back(lValue);
-            this->_lSubList.push_back(std::string());
+            this->_lSubList.emplace_back();
         }
     }
     else {
@@ -1893,7 +1893,7 @@ std::vector<PropertyLinkSubList::SubSet> PropertyLinkSubList::getSubListValues(b
             sub = _lSubList[i];
         if (values.size() == 0 || values.back().first != link){
             //new object started, start a new subset.
-            values.push_back(SubSet(link, std::vector<std::string>()));
+            values.emplace_back(link, std::vector<std::string>());
         }
         values.back().second.push_back(sub);
     }
@@ -2161,7 +2161,7 @@ void PropertyLinkSubList::Restore(Base::XMLReader &reader)
     reader.readEndElement("LinkSubList");
 
     // assignment
-    setValues(values,std::move(SubNames),std::move(shadows));
+    setValues(values,SubNames,std::move(shadows));
     _mapped.swap(mapped);
 }
 
@@ -2940,7 +2940,7 @@ void PropertyXLink::setValue(App::DocumentObject *lValue,
     _pcLink=lValue;
     if(docInfo && docInfo->pcDoc)
         stamp=docInfo->pcDoc->LastModifiedDate.getValue();
-    objectName = std::move(name);
+    objectName = name;
     setSubValues(std::move(subs),std::move(shadows));
     hasSetValue();
 }

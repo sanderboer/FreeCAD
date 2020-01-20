@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) 2004 Juergen Riegel <juergen.riegel@web.de>             *
+ *   Copyright (c) 2004 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -106,13 +106,14 @@ public:
     void removeOverlayWidget();
 
     View3DInventorViewer *getViewer(void) const {return _viewer;}
-  
+    virtual bool containsViewProvider(const ViewProvider*) const;
+
 public Q_SLOTS:
     /// override the cursor in this view
     void setOverrideCursor(const QCursor&);
     void restoreOverrideCursor();
 
-    void dump(const char* filename);
+    void dump(const char* filename, bool onlyVisible=false);
 
 protected Q_SLOTS:
     void stopAnimating();

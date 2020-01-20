@@ -36,13 +36,8 @@ __doc__ = "A container for all default values and job specific configuration val
 
 _RegisteredOps = {}
 
-LOGLEVEL = False
-
-if LOGLEVEL:
-    PathLog.setLevel(PathLog.Level.DEBUG, PathLog.thisModule())
-    PathLog.trackModule()
-else:
-    PathLog.setLevel(PathLog.Level.INFO, PathLog.thisModule())
+PathLog.setLevel(PathLog.Level.INFO, PathLog.thisModule())
+#PathLog.trackModule(PathLog.thisModule())
 
 def translate(context, text, disambig=None):
     return PySide.QtCore.QCoreApplication.translate(context, text, disambig)
@@ -209,11 +204,7 @@ class SetupSheet:
                 for propName in op.properties():
                     prop = OpPropertyName(opName, propName)
                     if hasattr(self.obj, prop):
-                        attr = getattr(self.obj, prop)
-                        if hasattr(attr, 'UserString'):
-                            settings[propName] = attr.UserString
-                        else:
-                            settings[propName] = attr
+                        settings[propName] = PathUtil.getPropertyValueString(self.obj, prop)
                 attrs[opName] = settings
 
         return attrs

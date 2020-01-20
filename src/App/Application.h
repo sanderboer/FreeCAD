@@ -1,5 +1,5 @@
 /***************************************************************************
- *   (c) Jürgen Riegel (juergen.riegel@web.de) 2002                        *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -19,7 +19,6 @@
  *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
  *   USA                                                                   *
  *                                                                         *
- *   Juergen Riegel 2002                                                   *
  ***************************************************************************/
 
 #ifndef APP_APPLICATION_H
@@ -301,6 +300,8 @@ public:
     //@{
     /// Register an import filetype and a module name
     void addImportType(const char* Type, const char* ModuleName);
+    /// Change the module name of a registered filetype
+    void changeImportModule(const char* Type, const char* OldModuleName, const char* NewModuleName);
     /// Return a list of modules that support the given filetype.
     std::vector<std::string> getImportModules(const char* Type) const;
     /// Return a list of all modules.
@@ -317,6 +318,8 @@ public:
     //@{
     /// Register an export filetype and a module name
     void addExportType(const char* Type, const char* ModuleName);
+    /// Change the module name of a registered filetype
+    void changeExportModule(const char* Type, const char* OldModuleName, const char* NewModuleName);
     /// Return a list of modules that support the given filetype.
     std::vector<std::string> getExportModules(const char* Type) const;
     /// Return a list of all modules.
@@ -459,8 +462,10 @@ private:
     static PyObject* sSetConfig         (PyObject *self,PyObject *args);
     static PyObject* sDumpConfig        (PyObject *self,PyObject *args);
     static PyObject* sAddImportType     (PyObject *self,PyObject *args);
+    static PyObject* sChangeImportModule(PyObject *self,PyObject *args);
     static PyObject* sGetImportType     (PyObject *self,PyObject *args);
     static PyObject* sAddExportType     (PyObject *self,PyObject *args);
+    static PyObject* sChangeExportModule(PyObject *self,PyObject *args);
     static PyObject* sGetExportType     (PyObject *self,PyObject *args);
     static PyObject* sGetResourceDir    (PyObject *self,PyObject *args);
     static PyObject* sGetUserAppDataDir (PyObject *self,PyObject *args);

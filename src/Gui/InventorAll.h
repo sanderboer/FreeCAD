@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2006     *
+ *   Copyright (c) 2006 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -78,6 +78,7 @@
 #include <Inventor/elements/SoViewVolumeElement.h>
 #include <Inventor/elements/SoModelMatrixElement.h>
 #include <Inventor/elements/SoTextureEnabledElement.h>
+#include <Inventor/elements/SoShapeStyleElement.h>
 #include <Inventor/engines/SoComposeVec3f.h>
 #include <Inventor/engines/SoComposeRotationFromTo.h>
 #include <Inventor/engines/SoComposeRotation.h>

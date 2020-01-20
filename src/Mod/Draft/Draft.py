@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-
 #***************************************************************************
-#*                                                                         *
-#*   Copyright (c) 2009, 2010                                              *
-#*   Yorik van Havre <yorik@uncreated.net>, Ken Cline <cline@frii.com>     *
+#*   Copyright (c) 2009, 2010 Yorik van Havre <yorik@uncreated.net>        *
+#*   Copyright (c) 2009, 2010 Ken Cline <cline@frii.com>                   *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
 #*   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -27,7 +25,7 @@
 
 __title__="FreeCAD Draft Workbench"
 __author__ = "Yorik van Havre, Werner Mayer, Martin Burbaum, Ken Cline, Dmitry Chigrin, Daniel Falck"
-__url__ = "http://www.freecadweb.org"
+__url__ = "https://www.freecadweb.org"
 
 ## \addtogroup DRAFT
 #  \brief Create and manipulate basic 2D objects
@@ -48,24 +46,23 @@ __url__ = "http://www.freecadweb.org"
 """The Draft module offers a range of tools to create and manipulate basic 2D objects"""
 
 import FreeCAD, math, sys, os, DraftVecUtils, WorkingPlane
+import draftutils.translate
 from FreeCAD import Vector
+from PySide.QtCore import QT_TRANSLATE_NOOP
+
 
 if FreeCAD.GuiUp:
     import FreeCADGui, Draft_rc
     from PySide import QtCore
-    from PySide.QtCore import QT_TRANSLATE_NOOP
     gui = True
     #from DraftGui import translate
 else:
-    def QT_TRANSLATE_NOOP(ctxt,txt):
-        return txt
+    # def QT_TRANSLATE_NOOP(ctxt,txt):
+    #     return txt
     #print("FreeCAD Gui not present. Draft module will have some features disabled.")
     gui = False
 
-def translate(ctx,txt):
-    return txt
-
-arrowtypes = ["Dot","Circle","Arrow","Tick","Tick-2"]
+translate = draftutils.translate.translate
 
 #---------------------------------------------------------------------------
 # Backwards compatibility
@@ -83,653 +80,95 @@ makeLayer = DraftLayer.makeLayer
 #---------------------------------------------------------------------------
 # General functions
 #---------------------------------------------------------------------------
+import draftutils.utils
+import draftutils.gui_utils
 
-def stringencodecoin(ustr):
-    """stringencodecoin(str): Encodes a unicode object to be used as a string in coin"""
-    try:
-        from pivy import coin
-        coin4 = coin.COIN_MAJOR_VERSION >= 4
-    except (ImportError, AttributeError):
-        coin4 = False
-    if coin4:
-        return ustr.encode('utf-8')
-    else:
-        return ustr.encode('latin1')
+arrowtypes = draftutils.utils.ARROW_TYPES
 
-def typecheck (args_and_types, name="?"):
-    """typecheck([arg1,type),(arg2,type),...]): checks arguments types"""
-    for v,t in args_and_types:
-        if not isinstance (v,t):
-            w = "typecheck[" + str(name) + "]: "
-            w += str(v) + " is not " + str(t) + "\n"
-            FreeCAD.Console.PrintWarning(w)
-            raise TypeError("Draft." + str(name))
+stringencodecoin = draftutils.utils.string_encode_coin
+string_encode_coin = draftutils.utils.string_encode_coin
 
-def getParamType(param):
-    if param in ["dimsymbol","dimPrecision","dimorientation","precision","defaultWP",
-                 "snapRange","gridEvery","linewidth","UiMode","modconstrain","modsnap",
-                 "maxSnapEdges","modalt","HatchPatternResolution","snapStyle",
-                 "dimstyle","gridSize"]:
-        return "int"
-    elif param in ["constructiongroupname","textfont","patternFile","template",
-                   "snapModes","FontFile","ClonePrefix","labeltype"] \
-        or "inCommandShortcut" in param:
-        return "string"
-    elif param in ["textheight","tolerance","gridSpacing","arrowsize","extlines","dimspacing",
-                   "dimovershoot","extovershoot"]:
-        return "float"
-    elif param in ["selectBaseObjects","alwaysSnap","grid","fillmode","saveonexit","maxSnap",
-                   "SvgLinesBlack","dxfStdSize","showSnapBar","hideSnapBar","alwaysShowGrid",
-                   "renderPolylineWidth","showPlaneTracker","UsePartPrimitives","DiscretizeEllipses",
-                   "showUnit"]:
-        return "bool"
-    elif param in ["color","constructioncolor","snapcolor","gridColor"]:
-        return "unsigned"
-    else:
-        return None
+typecheck = draftutils.utils.type_check
+type_check = draftutils.utils.type_check
 
-def getParam(param,default=None):
-    """getParam(parameterName): returns a Draft parameter value from the current config"""
-    p = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Draft")
-    t = getParamType(param)
-    #print("getting param ",param, " of type ",t, " default: ",str(default))
-    if t == "int":
-        if default is None:
-            default = 0
-        if param == "linewidth":
-            return FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").GetInt("DefaultShapeLineWidth",default)
-        return p.GetInt(param,default)
-    elif t == "string":
-        if default is None:
-            default = ""
-        return p.GetString(param,default)
-    elif t == "float":
-        if default is None:
-            default = 0
-        return p.GetFloat(param,default)
-    elif t == "bool":
-        if default is None:
-            default = False
-        return p.GetBool(param,default)
-    elif t == "unsigned":
-        if default is None:
-            default = 0
-        if param == "color":
-            return FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").GetUnsigned("DefaultShapeLineColor",default)
-        return p.GetUnsigned(param,default)
-    else:
-        return None
+getParamType = draftutils.utils.get_param_type
+get_param_type = draftutils.utils.get_param_type
 
-def setParam(param,value):
-    """setParam(parameterName,value): sets a Draft parameter with the given value"""
-    p = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Draft")
-    t = getParamType(param)
-    if t == "int":
-        if param == "linewidth":
-            FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").SetInt("DefaultShapeLineWidth",value)
-        else:
-            p.SetInt(param,value)
-    elif t == "string":
-        p.SetString(param,value)
-    elif t == "float":
-        p.SetFloat(param,value)
-    elif t == "bool":
-        p.SetBool(param,value)
-    elif t == "unsigned":
-        if param == "color":
-            FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").SetUnsigned("DefaultShapeLineColor",value)
-        else:
-            p.SetUnsigned(param,value)
+getParam = draftutils.utils.get_param
+get_param = draftutils.utils.get_param
 
-def precision():
-    """precision(): returns the precision value from Draft user settings"""
-    return getParam("precision",6)
+setParam = draftutils.utils.set_param
+set_param = draftutils.utils.set_param
 
-def tolerance():
-    """tolerance(): returns the tolerance value from Draft user settings"""
-    return getParam("tolerance",0.05)
+precision = draftutils.utils.precision
+tolerance = draftutils.utils.tolerance
+epsilon = draftutils.utils.epsilon
 
-def epsilon():
-    ''' epsilon(): returns a small number based on Draft.tolerance() for use in
-    floating point comparisons.  Use with caution. '''
-    return (1.0/(10.0**tolerance()))
+getRealName = draftutils.utils.get_real_name
+get_real_name = draftutils.utils.get_real_name
 
-def getRealName(name):
-    """getRealName(string): strips the trailing numbers from a string name"""
-    for i in range(1,len(name)):
-        if not name[-i] in '1234567890':
-            return name[:len(name)-(i-1)]
-    return name
+getType = draftutils.utils.get_type
+get_type = draftutils.utils.get_type
 
-def getType(obj):
-    """getType(object): returns the Draft type of the given object"""
-    import Part
-    if not obj:
-        return None
-    if isinstance(obj,Part.Shape):
-        return "Shape"
-    if "Proxy" in obj.PropertiesList:
-        if hasattr(obj.Proxy,"Type"):
-            return obj.Proxy.Type
-    if obj.isDerivedFrom("Sketcher::SketchObject"):
-        return "Sketch"
-    if (obj.TypeId == "Part::Line"):
-        return "Part::Line"
-    if (obj.TypeId == "Part::Offset2D"):
-        return "Offset2D"
-    if obj.isDerivedFrom("Part::Feature"):
-        return "Part"
-    if (obj.TypeId == "App::Annotation"):
-        return "Annotation"
-    if obj.isDerivedFrom("Mesh::Feature"):
-        return "Mesh"
-    if obj.isDerivedFrom("Points::Feature"):
-        return "Points"
-    if (obj.TypeId == "App::DocumentObjectGroup"):
-        return "Group"
-    if (obj.TypeId == "App::Part"):
-        return "App::Part"
-    return "Unknown"
+getObjectsOfType = draftutils.utils.get_objects_of_type
+get_objects_of_type = draftutils.utils.get_objects_of_type
 
-def getObjectsOfType(objectslist,typ):
-    """getObjectsOfType(objectslist,typ): returns a list of objects of type "typ" found
-    in the given object list"""
-    objs = []
-    for o in objectslist:
-        if getType(o) == typ:
-            objs.append(o)
-    return objs
+get3DView = draftutils.gui_utils.get_3d_view
+get_3d_view = draftutils.gui_utils.get_3d_view
 
-def get3DView():
-    """get3DView(): returns the current view if it is 3D, or the first 3D view found, or None"""
-    if FreeCAD.GuiUp:
-        import FreeCADGui
-        v = FreeCADGui.ActiveDocument.ActiveView
-        if "View3DInventor" in str(type(v)):
-            return v
-        #print("Debug: Draft: Warning, not working in active view")
-        v = FreeCADGui.ActiveDocument.mdiViewsOfType("Gui::View3DInventor")
-        if v:
-            return v[0]
-    return None
+isClone = draftutils.utils.is_clone
+is_clone = draftutils.utils.is_clone
 
-def isClone(obj,objtype,recursive=False):
-    """isClone(obj,objtype,[recursive]): returns True if the given object is
-    a clone of an object of the given type. If recursive is True, also check if
-    the clone is a clone of clone (of clone...)  of the given type."""
-    if isinstance(objtype,list):
-        return any([isClone(obj,t,recursive) for t in objtype])
-    if getType(obj) == "Clone":
-        if len(obj.Objects) == 1:
-            if getType(obj.Objects[0]) == objtype:
-                return True
-            elif recursive and (getType(obj.Objects[0]) == "Clone"):
-                return isClone(obj.Objects[0],objtype,recursive)
-    elif hasattr(obj,"CloneOf"):
-        if obj.CloneOf:
-            return True
-    return False
+getGroupNames = draftutils.utils.get_group_names
+get_group_names = draftutils.utils.get_group_names
 
-def getGroupNames():
-    """returns a list of existing groups in the document"""
-    glist = []
-    doc = FreeCAD.ActiveDocument
-    for obj in doc.Objects:
-        if obj.isDerivedFrom("App::DocumentObjectGroup") or (getType(obj) in ["Floor","Building","Site"]):
-            glist.append(obj.Name)
-    return glist
+ungroup = draftutils.utils.ungroup
 
-def ungroup(obj):
-    """removes the current object from any group it belongs to"""
-    for g in getGroupNames():
-        grp = FreeCAD.ActiveDocument.getObject(g)
-        if obj in grp.Group:
-            g = grp.Group
-            g.remove(obj)
-            grp.Group = g
+autogroup = draftutils.gui_utils.autogroup
 
-def autogroup(obj):
-    """adds a given object to the autogroup, if applicable"""
-    if FreeCAD.GuiUp:
-        if hasattr(FreeCADGui,"draftToolBar"):
-            if hasattr(FreeCADGui.draftToolBar,"autogroup") and (not FreeCADGui.draftToolBar.isConstructionMode()):
-                if FreeCADGui.draftToolBar.autogroup != None:
-                    g = FreeCAD.ActiveDocument.getObject(FreeCADGui.draftToolBar.autogroup)
-                    if g:
-                        found = False
-                        for o in g.Group:
-                            if o.Name == obj.Name:
-                                found = True
-                        if not found:
-                            gr = g.Group
-                            gr.append(obj)
-                            g.Group = gr
-                else:
-                    # Arch active container
-                    a = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("Arch")
-                    if a:
-                        a.addObject(obj)
+dimSymbol = draftutils.gui_utils.dim_symbol
+dim_symbol = draftutils.gui_utils.dim_symbol
 
-def dimSymbol(symbol=None,invert=False):
-    """returns the current dim symbol from the preferences as a pivy SoMarkerSet"""
-    if symbol is None:
-        symbol = getParam("dimsymbol",0)
-    from pivy import coin
-    if symbol == 0:
-        return coin.SoSphere()
-    elif symbol == 1:
-        marker = coin.SoMarkerSet()
-        marker.markerIndex = FreeCADGui.getMarkerIndex("circle", 9)
-        return marker
-    elif symbol == 2:
-        marker = coin.SoSeparator()
-        t = coin.SoTransform()
-        t.translation.setValue((0,-2,0))
-        t.center.setValue((0,2,0))
-        if invert:
-            t.rotation.setValue(coin.SbVec3f((0,0,1)),-math.pi/2)
-        else:
-            t.rotation.setValue(coin.SbVec3f((0,0,1)),math.pi/2)
-        c = coin.SoCone()
-        c.height.setValue(4)
-        marker.addChild(t)
-        marker.addChild(c)
-        return marker
-    elif symbol == 3:
-        marker = coin.SoSeparator()
-        c = coin.SoCoordinate3()
-        c.point.setValues([(-1,-2,0),(0,2,0),(1,2,0),(0,-2,0)])
-        f = coin.SoFaceSet()
-        marker.addChild(c)
-        marker.addChild(f)
-        return marker
-    elif symbol == 4:
-        return dimDash((-1.5,-1.5,0),(1.5,1.5,0))
-    else:
-        print("Draft.dimsymbol: Not implemented")
-        return coin.SoSphere()
+dimDash = draftutils.gui_utils.dim_dash
+dim_dash = draftutils.gui_utils.dim_dash
 
-def dimDash(p1, p2):
-    """dimDash(p1, p2): returns pivy SoSeparator.
-    Used for making Tick-2, DimOvershoot, ExtOvershoot dashes.
-    """
-    from pivy import coin
-    dash = coin.SoSeparator()
-    v = coin.SoVertexProperty()
-    v.vertex.set1Value(0, p1)
-    v.vertex.set1Value(1, p2)
-    l = coin.SoLineSet()
-    l.vertexProperty = v
-    dash.addChild(l)
-    return dash
+shapify = draftutils.utils.shapify
 
-def shapify(obj):
-    """shapify(object): transforms a parametric shape object into
-    non-parametric and returns the new object"""
-    try:
-        shape = obj.Shape
-    except Exception:
-        return None
-    if len(shape.Faces) == 1:
-        name = "Face"
-    elif len(shape.Solids) == 1:
-        name = "Solid"
-    elif len(shape.Solids) > 1:
-        name = "Compound"
-    elif len(shape.Faces) > 1:
-        name = "Shell"
-    elif len(shape.Wires) == 1:
-        name = "Wire"
-    elif len(shape.Edges) == 1:
-        import DraftGeomUtils
-        if DraftGeomUtils.geomType(shape.Edges[0]) == "Line":
-            name = "Line"
-        else:
-            name = "Circle"
-    else:
-        name = getRealName(obj.Name)
-    FreeCAD.ActiveDocument.removeObject(obj.Name)
-    newobj = FreeCAD.ActiveDocument.addObject("Part::Feature",name)
-    newobj.Shape = shape
+getGroupContents = draftutils.utils.get_group_contents
+get_group_contents = draftutils.utils.get_group_contents
 
-    return newobj
+removeHidden = draftutils.gui_utils.remove_hidden
+remove_hidden = draftutils.gui_utils.remove_hidden
 
-def getGroupContents(objectslist,walls=False,addgroups=False,spaces=False,noarchchild=False):
-    """getGroupContents(objectlist,[walls,addgroups]): if any object of the given list
-    is a group, its content is appended to the list, which is returned. If walls is True,
-    walls and structures are also scanned for included windows or rebars. If addgroups
-    is true, the group itself is also included in the list."""
-    def getWindows(obj):
-        l = []
-        if getType(obj) in ["Wall","Structure"]:
-            for o in obj.OutList:
-                l.extend(getWindows(o))
-            for i in obj.InList:
-                if (getType(i) in ["Window"]) or isClone(obj,"Window"):
-                    if hasattr(i,"Hosts"):
-                        if obj in i.Hosts:
-                            l.append(i)
-                elif (getType(i) in ["Rebar"]) or isClone(obj,"Rebar"):
-                    if hasattr(i,"Host"):
-                        if obj == i.Host:
-                            l.append(i)
-        elif (getType(obj) in ["Window","Rebar"]) or isClone(obj,["Window","Rebar"]):
-            l.append(obj)
-        return l
+printShape = draftutils.utils.print_shape
+print_shape = draftutils.utils.print_shape
 
-    newlist = []
-    if not isinstance(objectslist,list):
-        objectslist = [objectslist]
-    for obj in objectslist:
-        if obj:
-            if obj.isDerivedFrom("App::DocumentObjectGroup") or ((getType(obj) in ["App::Part","Building","BuildingPart","Space","Site"]) and hasattr(obj,"Group")):
-                if getType(obj) == "Site":
-                    if obj.Shape:
-                        newlist.append(obj)
-                if obj.isDerivedFrom("Drawing::FeaturePage"):
-                    # skip if the group is a page
-                    newlist.append(obj)
-                else:
-                    if addgroups or (spaces and (getType(obj) == "Space")):
-                        newlist.append(obj)
-                    if noarchchild and (getType(obj) in ["Building","BuildingPart"]):
-                        pass
-                    else:
-                        newlist.extend(getGroupContents(obj.Group,walls,addgroups))
-            else:
-                #print("adding ",obj.Name)
-                newlist.append(obj)
-                if walls:
-                    newlist.extend(getWindows(obj))
+compareObjects = draftutils.utils.compare_objects
+compare_objects = draftutils.utils.compare_objects
 
-    # cleaning possible duplicates
-    cleanlist = []
-    for obj in newlist:
-        if not obj in cleanlist:
-            cleanlist.append(obj)
-    return cleanlist
+formatObject = draftutils.gui_utils.format_object
+format_object = draftutils.gui_utils.format_object
 
-def removeHidden(objectslist):
-    """removeHidden(objectslist): removes hidden objects from the list"""
-    newlist = objectslist[:]
-    for o in objectslist:
-        if o.ViewObject:
-            if not o.ViewObject.isVisible():
-                newlist.remove(o)
-    return newlist
+getSelection = draftutils.gui_utils.get_selection
+get_selection = draftutils.gui_utils.get_selection
 
-def printShape(shape):
-    """prints detailed information of a shape"""
-    print("solids: ", len(shape.Solids))
-    print("faces: ", len(shape.Faces))
-    print("wires: ", len(shape.Wires))
-    print("edges: ", len(shape.Edges))
-    print("verts: ", len(shape.Vertexes))
-    if shape.Faces:
-        for f in range(len(shape.Faces)):
-            print("face ",f,":")
-            for v in shape.Faces[f].Vertexes:
-                print("    ",v.Point)
-    elif shape.Wires:
-        for w in range(len(shape.Wires)):
-            print("wire ",w,":")
-            for v in shape.Wires[w].Vertexes:
-                print("    ",v.Point)
-    else:
-        for v in shape.Vertexes:
-            print("    ",v.Point)
+getSelectionEx = draftutils.gui_utils.get_selection_ex
+get_selection_ex = draftutils.gui_utils.get_selection_ex
 
-def compareObjects(obj1,obj2):
-    """Prints the differences between 2 objects"""
+select = draftutils.gui_utils.select
 
-    if obj1.TypeId != obj2.TypeId:
-        print(obj1.Name + " and " + obj2.Name + " are of different types")
-    elif getType(obj1) != getType(obj2):
-        print(obj1.Name + " and " + obj2.Name + " are of different types")
-    else:
-        for p in obj1.PropertiesList:
-            if p in obj2.PropertiesList:
-                if p in ["Shape","Label"]:
-                    pass
-                elif p ==  "Placement":
-                    delta = str((obj1.Placement.Base.sub(obj2.Placement.Base)).Length)
-                    print("Objects have different placements. Distance between the 2: " + delta + " units")
-                else:
-                    if getattr(obj1,p) != getattr(obj2,p):
-                        print("Property " + p + " has a different value")
-            else:
-                print("Property " + p + " doesn't exist in one of the objects")
+loadSvgPatterns = draftutils.utils.load_svg_patterns
+load_svg_patterns = draftutils.utils.load_svg_patterns
 
-def formatObject(target,origin=None):
-    """
-    formatObject(targetObject,[originObject]): This function applies
-    to the given target object the current properties
-    set on the toolbar (line color and line width),
-    or copies the properties of another object if given as origin.
-    It also places the object in construction group if needed.
-    """
-    if not target:
-        return
-    obrep = target.ViewObject
-    if not obrep:
-        return
-    ui = None
-    if gui:
-        if hasattr(FreeCADGui,"draftToolBar"):
-            ui = FreeCADGui.draftToolBar
-    if ui:
-        doc = FreeCAD.ActiveDocument
-        if ui.isConstructionMode():
-            col = fcol = ui.getDefaultColor("constr")
-            gname = getParam("constructiongroupname","Construction")
-            grp = doc.getObject(gname)
-            if not grp:
-                grp = doc.addObject("App::DocumentObjectGroup",gname)
-            grp.addObject(target)
-            if hasattr(obrep,"Transparency"):
-                obrep.Transparency = 80
-        else:
-            col = ui.getDefaultColor("ui")
-            fcol = ui.getDefaultColor("face")
-        col = (float(col[0]),float(col[1]),float(col[2]),0.0)
-        fcol = (float(fcol[0]),float(fcol[1]),float(fcol[2]),0.0)
-        lw = ui.linewidth
-        fs = ui.fontsize
-        if not origin or not hasattr(origin,'ViewObject'):
-            if "FontSize" in obrep.PropertiesList: obrep.FontSize = fs
-            if "TextColor" in obrep.PropertiesList: obrep.TextColor = col
-            if "LineWidth" in obrep.PropertiesList: obrep.LineWidth = lw
-            if "PointColor" in obrep.PropertiesList: obrep.PointColor = col
-            if "LineColor" in obrep.PropertiesList: obrep.LineColor = col
-            if "ShapeColor" in obrep.PropertiesList: obrep.ShapeColor = fcol
-        else:
-            matchrep = origin.ViewObject
-            for p in matchrep.PropertiesList:
-                if not p in ["DisplayMode","BoundingBox","Proxy","RootNode","Visibility"]:
-                    if p in obrep.PropertiesList:
-                        if not obrep.getEditorMode(p):
-                            if hasattr(getattr(matchrep,p),"Value"):
-                                val = getattr(matchrep,p).Value
-                            else:
-                                val = getattr(matchrep,p)
-                            try:
-                                setattr(obrep,p,val)
-                            except Exception:
-                                pass
-            if matchrep.DisplayMode in obrep.listDisplayModes():
-                obrep.DisplayMode = matchrep.DisplayMode
-            if hasattr(matchrep,"DiffuseColor") and hasattr(obrep,"DiffuseColor"):
-                obrep.DiffuseColor = matchrep.DiffuseColor
+svgpatterns = draftutils.utils.svg_patterns
+svg_patterns = draftutils.utils.svg_patterns
 
-def getSelection():
-    """getSelection(): returns the current FreeCAD selection"""
-    if gui:
-        return FreeCADGui.Selection.getSelection()
-    return None
+loadTexture = draftutils.gui_utils.load_texture
+load_texture = draftutils.gui_utils.load_texture
 
-def getSelectionEx():
-    """getSelectionEx(): returns the current FreeCAD selection (with subobjects)"""
-    if gui:
-        return FreeCADGui.Selection.getSelectionEx()
-    return None
+getMovableChildren = draftutils.utils.get_movable_children
+get_movable_children = draftutils.utils.get_movable_children
 
-def select(objs=None):
-    """select(object): deselects everything and selects only the passed object or list"""
-    if gui:
-        FreeCADGui.Selection.clearSelection()
-        if objs:
-            if not isinstance(objs,list):
-                objs = [objs]
-            for obj in objs:
-                if obj:
-                    FreeCADGui.Selection.addSelection(obj)
-
-def loadSvgPatterns():
-    """loads the default Draft SVG patterns and custom patters if available"""
-    import importSVG
-    from PySide import QtCore
-    FreeCAD.svgpatterns = {}
-    # getting default patterns
-    patfiles = QtCore.QDir(":/patterns").entryList()
-    for fn in patfiles:
-        fn = ":/patterns/"+str(fn)
-        f = QtCore.QFile(fn)
-        f.open(QtCore.QIODevice.ReadOnly)
-        p = importSVG.getContents(str(f.readAll()),'pattern',True)
-        if p:
-            for k in p:
-                p[k] = [p[k],fn]
-            FreeCAD.svgpatterns.update(p)
-    # looking for user patterns
-    altpat = getParam("patternFile","")
-    if os.path.isdir(altpat):
-        for f in os.listdir(altpat):
-            if f[-4:].upper() == ".SVG":
-                p = importSVG.getContents(altpat+os.sep+f,'pattern')
-                if p:
-                    for k in p:
-                        p[k] = [p[k],altpat+os.sep+f]
-                    FreeCAD.svgpatterns.update(p)
-
-def svgpatterns():
-    """svgpatterns(): returns a dictionary with installed SVG patterns"""
-    if hasattr(FreeCAD,"svgpatterns"):
-        return FreeCAD.svgpatterns
-    else:
-        loadSvgPatterns()
-        if hasattr(FreeCAD,"svgpatterns"):
-            return FreeCAD.svgpatterns
-    return {}
-
-def loadTexture(filename,size=None):
-    """loadTexture(filename,[size]): returns a SoSFImage from a file. If size
-    is defined (an int or a tuple), and provided the input image is a png file,
-    it will be scaled to match the given size."""
-    if gui:
-        from pivy import coin
-        from PySide import QtGui,QtSvg
-        try:
-            p = QtGui.QImage(filename)
-            # buggy - TODO: allow to use resolutions
-            #if size and (".svg" in filename.lower()):
-            #    # this is a pattern, not a texture
-            #    if isinstance(size,int):
-            #        size = (size,size)
-            #    svgr = QtSvg.QSvgRenderer(filename)
-            #    p = QtGui.QImage(size[0],size[1],QtGui.QImage.Format_ARGB32)
-            #    pa = QtGui.QPainter()
-            #    pa.begin(p)
-            #    svgr.render(pa)
-            #    pa.end()
-            #else:
-            #    p = QtGui.QImage(filename)
-            size = coin.SbVec2s(p.width(), p.height())
-            buffersize = p.byteCount()
-            numcomponents = int (float(buffersize) / ( size[0] * size[1] ))
-
-            img = coin.SoSFImage()
-            width = size[0]
-            height = size[1]
-            byteList = []
-            isPy2 = sys.version_info.major < 3
-
-            for y in range(height):
-                #line = width*numcomponents*(height-(y));
-                for x in range(width):
-                    rgb = p.pixel(x,y)
-                    if numcomponents == 1:
-                        if isPy2:
-                            byteList.append(chr(QtGui.qGray( rgb )))
-                        else:
-                            byteList.append(chr(QtGui.qGray( rgb )).encode('latin-1'))
-                    elif numcomponents == 2:
-                        if isPy2:
-                            byteList.append(chr(QtGui.qGray( rgb )))
-                            byteList.append(chr(QtGui.qAlpha( rgb )))
-                        else:
-                            byteList.append(chr(QtGui.qGray( rgb )).encode('latin-1'))
-                            byteList.append(chr(QtGui.qAlpha( rgb )).encode('latin-1'))
-                    elif numcomponents == 3:
-                        if isPy2:
-                            byteList.append(chr(QtGui.qRed( rgb )))
-                            byteList.append(chr(QtGui.qGreen( rgb )))
-                            byteList.append(chr(QtGui.qBlue( rgb )))
-                        else:
-                            byteList.append(chr(QtGui.qRed( rgb )).encode('latin-1'))
-                            byteList.append(chr(QtGui.qGreen( rgb )).encode('latin-1'))
-                            byteList.append(chr(QtGui.qBlue( rgb )).encode('latin-1'))
-                    elif numcomponents == 4:
-                        if isPy2:
-                            byteList.append(chr(QtGui.qRed( rgb )))
-                            byteList.append(chr(QtGui.qGreen( rgb )))
-                            byteList.append(chr(QtGui.qBlue( rgb )))
-                            byteList.append(chr(QtGui.qAlpha( rgb )))
-                        else:
-                            byteList.append(chr(QtGui.qRed( rgb )).encode('latin-1'))
-                            byteList.append(chr(QtGui.qGreen( rgb )).encode('latin-1'))
-                            byteList.append(chr(QtGui.qBlue( rgb )).encode('latin-1'))
-                            byteList.append(chr(QtGui.qAlpha( rgb )).encode('latin-1'))
-                    #line += numcomponents
-
-            bytes = b"".join(byteList)
-            img.setValue(size, numcomponents, bytes)
-        except:
-            print("Draft: unable to load texture")
-            return None
-        else:
-            return img
-    return None
-
-def getMovableChildren(objectslist,recursive=True):
-    """getMovableChildren(objectslist,[recursive]): extends the given list of objects
-    with all child objects that have a "MoveWithHost" property set to True. If
-    recursive is True, all descendents are considered, otherwise only direct children."""
-    added = []
-    if not isinstance(objectslist,list):
-        objectslist = [objectslist]
-    for obj in objectslist:
-        if not (getType(obj) in ["Clone","SectionPlane","Facebinder","BuildingPart"]):
-            # objects that should never move their children
-            children = obj.OutList
-            if  hasattr(obj,"Proxy"):
-                if obj.Proxy:
-                    if hasattr(obj.Proxy,"getSiblings") and not(getType(obj) in ["Window"]):
-                        #children.extend(obj.Proxy.getSiblings(obj))
-                        pass
-            for child in children:
-                if hasattr(child,"MoveWithHost"):
-                    if child.MoveWithHost:
-                        if hasattr(obj,"CloneOf"):
-                            if obj.CloneOf:
-                                if obj.CloneOf.Name != child.Name:
-                                    added.append(child)
-                            else:
-                                added.append(child)
-                        else:
-                            added.append(child)
-            if recursive:
-                added.extend(getMovableChildren(children))
-    return added
 
 def makeCircle(radius, placement=None, face=None, startangle=None, endangle=None, support=None):
     """makeCircle(radius,[placement,face,startangle,endangle])
@@ -1789,7 +1228,7 @@ def rotate(objectslist,angle,center=Vector(0,0,0),axis=Vector(0,0,1),copy=False)
             newobj = makeCopy(obj)
         else:
             newobj = obj
-        if hasattr(obj,'Shape'):
+        if hasattr(obj,'Shape') and (getType(obj) not in ["WorkingPlaneProxy","BuildingPart"]):
             shape = obj.Shape.copy()
             shape.rotate(DraftVecUtils.tup(center), DraftVecUtils.tup(axis), angle)
             newobj.Shape = shape
@@ -5717,6 +5156,12 @@ class _DraftLink(_DraftObject):
             obj.setPropertyStatus('PlacementList','Immutable')
         else:
             obj.setPropertyStatus('PlacementList','-Immutable')
+        if not hasattr(obj,'LinkTransform'):
+            obj.addProperty('App::PropertyBool','LinkTransform',' Link')
+        if not hasattr(obj,'ColoredElements'):
+            obj.addProperty('App::PropertyLinkSubHidden','ColoredElements',' Link')
+            obj.setPropertyStatus('ColoredElements','Hidden')
+        obj.configLinkProperty('LinkTransform','ColoredElements')
 
     def getViewProviderName(self,_obj):
         if self.useLink:
@@ -5726,8 +5171,13 @@ class _DraftLink(_DraftObject):
     def onDocumentRestored(self, obj):
         if self.useLink:
             self.linkSetup(obj)
-            if obj.Shape.isNull():
+        else:
+            obj.setPropertyStatus('Shape','-Transient')
+        if obj.Shape.isNull():
+            if getattr(obj,'PlacementList',None):
                 self.buildShape(obj,obj.Placement,obj.PlacementList)
+            else:
+                self.execute(obj)
 
     def buildShape(self,obj,pl,pls):
         import Part
@@ -5767,9 +5217,9 @@ class _DraftLink(_DraftObject):
             return False # return False to call LinkExtension::execute()
 
     def onChanged(self, obj, prop):
-        if getattr(obj,'useLink',False):
+        if not getattr(self,'useLink',False):
             return
-        elif prop == 'Fuse':
+        if prop == 'Fuse':
             if obj.Fuse:
                 obj.setPropertyStatus('Shape','-Transient')
             else:
@@ -5885,7 +5335,7 @@ class _Array(_DraftLink):
             rc = xcount*rdist
             c = 2*rc*math.pi
             n = math.floor(c/tdist)
-            n = math.floor(n/sym)*sym
+            n = int(math.floor(n/sym)*sym)
             if n == 0: continue
             angle = 360/n
             for ycount in range(0, n):
@@ -5896,20 +5346,26 @@ class _Array(_DraftLink):
                 base.append(npl)
         return base
 
-    def polarArray(self,pl,center,angle,num,axis,axisvector):
+    def polarArray(self,spl,center,angle,num,axis,axisvector):
         #print("angle ",angle," num ",num)
         import Part
-        base = [pl.copy()]
+        spin = FreeCAD.Placement(Vector(), spl.Rotation)
+        pl = FreeCAD.Placement(spl.Base, FreeCAD.Rotation())
+        center = center.sub(spl.Base)
+        base = [spl.copy()]
         if angle == 360:
             fraction = float(angle)/num
         else:
             if num == 0:
                 return base
             fraction = float(angle)/(num-1)
+        ctr = DraftVecUtils.tup(center)
+        axs = DraftVecUtils.tup(axis)
         for i in range(num-1):
             currangle = fraction + (i*fraction)
             npl = pl.copy()
-            npl.rotate(DraftVecUtils.tup(center), DraftVecUtils.tup(axis), currangle)
+            npl.rotate(ctr, axs, currangle)
+            npl = npl.multiply(spin)
             if axisvector:
                 if not DraftVecUtils.isNull(axisvector):
                     npl.translate(FreeCAD.Vector(axisvector).multiply(i+1))
@@ -5938,6 +5394,7 @@ class _PathArray(_DraftLink):
             obj.addProperty("App::PropertyBool","ExpandArray","Draft",
                     QT_TRANSLATE_NOOP("App::Property","Show array element as children object"))
             obj.ExpandArray = False
+            obj.setPropertyStatus('Shape','Transient')
 
         _DraftLink.attach(self,obj)
 

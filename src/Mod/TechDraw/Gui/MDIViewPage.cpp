@@ -161,8 +161,16 @@ MDIViewPage::MDIViewPage(ViewProviderPage *pageVp, Gui::Document* doc, QWidget* 
     App::Document* appDoc = m_vpPage->getDocument()->getDocument();
     auto bnd = boost::bind(&MDIViewPage::onDeleteObject, this, _1);
     connectDeletedObject = appDoc->signalDeletedObject.connect(bnd);
+}
 
 
+MDIViewPage::~MDIViewPage()
+{
+    connectDeletedObject.disconnect();
+}
+
+void MDIViewPage::addChildrenToPage(void)
+{
      // A fresh page is added and we iterate through its collected children and add these to Canvas View  -MLP
      // if docobj is a featureviewcollection (ex orthogroup), add its child views. if there are ever children that have children,
      // we'll have to make this recursive. -WF
@@ -190,12 +198,8 @@ MDIViewPage::MDIViewPage(ViewProviderPage *pageVp, Gui::Document* doc, QWidget* 
         attachTemplate(pageTemplate);
         matchSceneRectToTemplate();
     }
-}
 
-
-MDIViewPage::~MDIViewPage()
-{
-    connectDeletedObject.disconnect();
+    viewAll();
 }
 
 void MDIViewPage::matchSceneRectToTemplate(void)
@@ -246,10 +250,13 @@ void MDIViewPage::setBalloonGroups(void)
 
 void MDIViewPage::setLeaderGroups(void)
 {
+//    Base::Console().Message("MDIVP::setLeaderGroups()\n");
     const std::vector<QGIView *> &allItems = m_view->getViews();
     std::vector<QGIView *>::const_iterator itInspect;
     int leadItemType = QGraphicsItem::UserType + 232;
 
+    //make sure that qgileader belongs to correct parent. 
+    //quite possibly redundant
     for (itInspect = allItems.begin(); itInspect != allItems.end(); itInspect++) {
         if (((*itInspect)->type() == leadItemType) && (!(*itInspect)->group())) {
             QGIView* parent = m_view->findParent((*itInspect));
@@ -393,14 +400,11 @@ void MDIViewPage::onDeleteObject(const App::DocumentObject& obj)
     //if this page has a QView for this obj, delete it.
     if (obj.isDerivedFrom(TechDraw::DrawView::getClassTypeId())) {
         (void) m_view->removeQViewByName(obj.getNameInDocument());
-    } else if (m_objectName == obj.getNameInDocument()) {
-        // if obj is me, hide myself and my tab
-        m_vpPage->hide();
     }
 }
 
 void MDIViewPage::onTimer() {
-    updateDrawing(true);
+    fixOrphans(true);
 }
 
 void MDIViewPage::updateTemplate(bool forceUpdate)
@@ -430,9 +434,7 @@ void MDIViewPage::updateTemplate(bool forceUpdate)
 }
 
 //this is time consuming. should only be used when there is a problem.
-//should have been called MDIViewPage::fixWidowAndOrphans()
-//void MDIViewPage::updateDrawing(bool forceUpdate)
-void MDIViewPage::updateDrawing(bool force)
+void MDIViewPage::fixOrphans(bool force)
 {
     if(!force) {
         m_timer->start(100);
@@ -479,7 +481,7 @@ void MDIViewPage::updateDrawing(bool force)
     // WF: why do we do this?  views should be keeping themselves up to date.
 //    const std::vector<QGIView *> &upviews = m_view->getViews();
 //    for(std::vector<QGIView *>::const_iterator it = upviews.begin(); it != upviews.end(); ++it) {
-//        Base::Console().Message("TRACE - MDIVP::updateDrawing - updating a QGIVxxxx\n");
+//        Base::Console().Message("TRACE - MDIVP::fixOrphans - updating a QGIVxxxx\n");
 //        if((*it)->getViewObject()->isTouched() ||
 //           forceUpdate) {
 //            (*it)->updateView(forceUpdate);
@@ -487,7 +489,7 @@ void MDIViewPage::updateDrawing(bool force)
 //    }
 }
 
-//NOTE: this doesn't add missing views.  see updateDrawing()
+//NOTE: this doesn't add missing views.  see fixOrphans()
 void MDIViewPage::redrawAllViews()
 {
     const std::vector<QGIView *> &upviews = m_view->getViews();
@@ -496,7 +498,7 @@ void MDIViewPage::redrawAllViews()
     }
 }
 
-//NOTE: this doesn't add missing views.   see updateDrawing()
+//NOTE: this doesn't add missing views.   see fixOrphans()
 void MDIViewPage::redraw1View(TechDraw::DrawView* dv)
 {
     std::string dvName = dv->getNameInDocument();
@@ -1016,43 +1018,47 @@ void MDIViewPage::blockSelection(const bool state)
 //Set all QGIViews to unselected state
 void MDIViewPage::clearSceneSelection()
 {
-  blockSelection(true);
-  m_sceneSelected.clear();
+//    Base::Console().Message("MDIVP::clearSceneSelection()\n");
+    blockSelection(true);
+    m_sceneSelected.clear();
 
-  std::vector<QGIView *> views = m_view->getViews();
+    std::vector<QGIView *> views = m_view->getViews();
 
-  // Iterate through all views and unselect all
-  for (std::vector<QGIView *>::iterator it = views.begin(); it != views.end(); ++it) {
-      QGIView *item = *it;
-      bool state = item->isSelected();
-      if (state) {
-          item->setSelected(false);
-          item->updateView();
-      }
-  }
+    // Iterate through all views and unselect all
+    for (std::vector<QGIView *>::iterator it = views.begin(); it != views.end(); ++it) {
+        QGIView *item = *it;
+        bool state = item->isSelected();
 
-  blockSelection(false);
+        //handle oddballs
+        QGIViewDimension* dim = dynamic_cast<QGIViewDimension*>(*it);
+        if (dim != nullptr) {
+            state = dim->getDatumLabel()->isSelected();
+        } else {
+            QGIViewBalloon* bal = dynamic_cast<QGIViewBalloon*>(*it);
+                if (bal != nullptr) {
+                    state = bal->getBalloonLabel()->isSelected();
+                }
+        }
+
+        if (state) {
+            item->setGroupSelection(false);
+            item->updateView();
+        }
+    }
+
+    blockSelection(false);
 }
 
 //!Update QGIView's selection state based on Selection made outside Drawing Interface
 void MDIViewPage::selectQGIView(App::DocumentObject *obj, const bool isSelected)
 {
 //    Base::Console().Message("MDIVP::selectQGIV(%s) - %d\n", obj->getNameInDocument(), isSelected);
-
-    App::DocumentObject* objCopy = obj;
-    TechDraw::DrawHatch* hatchObj = dynamic_cast<TechDraw::DrawHatch*>(objCopy);
-    if (hatchObj) {                                                    //Hatch does not have a QGIV of it's own. mark parent as selected.
-        objCopy = hatchObj->getSourceView();                           //possible to highlight subObject?
-    }
-    QGIView *view = m_view->findQViewForDocObj(objCopy);
+    QGIView *view = m_view->findQViewForDocObj(obj);
 
     blockSelection(true);
     if(view) {
-        bool state = view->isSelected();
-        if (state != isSelected) {
-            view->setSelected(isSelected);
-            view->updateView();
-        }
+        view->setGroupSelection(isSelected);
+        view->updateView();
     }
     blockSelection(false);
 }
@@ -1074,15 +1080,16 @@ void MDIViewPage::onSelectionChanged(const Gui::SelectionChanges& msg)
             }
         }
         blockSelection(false);
-    } else {
-        bool selectState = (msg.Type == Gui::SelectionChanges::AddSelection) ? true : false;
+    } else if(msg.Type == Gui::SelectionChanges::AddSelection) {
         blockSelection(true);
         for (auto& so: selObjs){
             if (so.pObject->isDerivedFrom(TechDraw::DrawView::getClassTypeId())) {
-                selectQGIView(so.pObject, selectState);
+                selectQGIView(so.pObject, true);
             }
         }
         blockSelection(false);
+    } else {
+        Base::Console().Log("MDIVP::onSelectionChanged - unhandled: %d\n", msg.Type);
     }
 }
 
@@ -1290,12 +1297,6 @@ void MDIViewPage::setTreeToSceneSelect(void)
 //                    Base::Console().Message("MDIVP::setTreeToScene - mText has no parent Feature\n");
                     continue;
                 }
-//                if (!parentFeat->isDerivedFrom(TechDraw::DrawLeaderLine::getClassTypeId())) {
-//                    //mtext is parented to something other than Leader
-//                    //need special cases here?
-//                    Base::Console().Message("MDIVP::setTreeToScene - mText parentFeat is not LeaderLine\n");
-//                    continue;
-//                }
                 const char* name = parentFeat->getNameInDocument();
                 if (!name) {                                   //can happen during undo/redo if Dim is selected???
 //                    Base::Console().Message("INFO - MDIVP::sceneSelectionChanged - parentFeat name is null!\n");

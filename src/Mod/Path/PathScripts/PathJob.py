@@ -37,13 +37,8 @@ import json
 from PathScripts.PathPostProcessor import PostProcessor
 from PySide import QtCore
 
-LOGLEVEL = False
-
-if LOGLEVEL:
-    PathLog.setLevel(PathLog.Level.DEBUG, PathLog.thisModule())
-    PathLog.trackModule(PathLog.thisModule())
-else:
-    PathLog.setLevel(PathLog.Level.INFO, PathLog.thisModule())
+PathLog.setLevel(PathLog.Level.INFO, PathLog.thisModule())
+#PathLog.trackModule(PathLog.thisModule())
 
 
 # Qt translation handling
@@ -222,6 +217,7 @@ class ObjectJob:
         PathLog.debug('taking down tool controller')
         for tc in obj.ToolController:
             PathUtil.clearExpressionEngine(tc)
+            tc.Proxy.onDelete(tc)
             doc.removeObject(tc.Name)
         obj.ToolController = []
         # SetupSheet

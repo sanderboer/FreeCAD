@@ -1,6 +1,6 @@
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2016 - Bernd Hahnebach <bernd@bimstatik.org>            *
+# *   Copyright (c) 2016 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -100,7 +100,7 @@ def import_z88_disp(
             )
             result_mesh_object.FemMesh = femmesh
         else:
-            Console.PrintError("Z88 mesh file z88i1.txt not found!")
+            Console.PrintError("Z88 mesh file z88i1.txt not found.\n")
 
         # create result obj
         for result_set in disp_read["Results"]:

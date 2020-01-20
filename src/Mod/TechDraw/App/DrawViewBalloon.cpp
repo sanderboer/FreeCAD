@@ -57,19 +57,44 @@
 #include "LineGroup.h"
 
 
-//#include <Mod/TechDraw/App/DrawViewBalloonPy.h>  // generated from DrawViewDimensionPy.xml
+//#include <Mod/TechDraw/App/DrawViewBalloonPy.h>  // generated from DrawViewBalloonPy.xml
 
 using namespace TechDraw;
 
 //===========================================================================
-// DrawViewDimension
+// DrawViewBalloon
 //===========================================================================
+//
+// X,Y is the center of the balloon bubble
+// OriginX, OriginY is the tip of the arrow
+// these are in ???? coordinates
 
 PROPERTY_SOURCE(TechDraw::DrawViewBalloon, TechDraw::DrawView)
 
-const char* DrawViewBalloon::endTypeEnums[]= {"Arrow",
-                                              "Dot",
+//from Gui/QGIArrow.h
+//enum ArrowType {
+//        FILLED_TRIANGLE = 0,
+//        OPEN_ARROW,
+//        HASH_MARK,
+//        DOT,
+//        OPEN_CIRCLE,
+//        FORK,
+//        PYRAMID
+//    };
+
+const char* DrawViewBalloon::endTypeEnums[]= { "FILLED_TRIANGLE",
+                                               "OPEN_ARROW",
+                                               "HASH_MARK",
+                                               "DOT",
+                                               "OPEN_CIRCLE",
+                                               "FORK",
+                                               "PYRAMID",
+                                               "NONE",
                                                NULL};
+
+//const char* DrawViewBalloon::endTypeEnums[]= {"Arrow",
+//                                              "Dot",
+//                                               NULL};
 
 const char* DrawViewBalloon::balloonTypeEnums[]= {"Circular",
                                                   "None",
@@ -83,7 +108,8 @@ const char* DrawViewBalloon::balloonTypeEnums[]= {"Circular",
 DrawViewBalloon::DrawViewBalloon(void)
 {
     ADD_PROPERTY_TYPE(Text ,     (""),"",App::Prop_None,"The text to be displayed");
-    ADD_PROPERTY_TYPE(sourceView,(0),"",(App::PropertyType)(App::Prop_None),"Source view for balloon");
+//    ADD_PROPERTY_TYPE(SourceView,(0),"",(App::PropertyType)(App::Prop_None),"Source view for balloon");
+    ADD_PROPERTY_TYPE(SourceView,(0),"",(App::PropertyType)(App::Prop_None),"Source view for balloon");
     ADD_PROPERTY_TYPE(OriginX,(0),"",(App::PropertyType)(App::Prop_None),"Balloon origin x");
     ADD_PROPERTY_TYPE(OriginY,(0),"",(App::PropertyType)(App::Prop_None),"Balloon origin y");
     ADD_PROPERTY_TYPE(OriginIsSet, (false), "",(App::PropertyType)(App::Prop_None),"Balloon origin is set");
@@ -98,19 +124,15 @@ DrawViewBalloon::DrawViewBalloon(void)
 
     ADD_PROPERTY_TYPE(TextWrapLen,(-1),"",(App::PropertyType)(App::Prop_None),"Balloon symbol scale");
 
-//    OriginX.setStatus(App::Property::Hidden,false);
-//    OriginY.setStatus(App::Property::Hidden,false);
+    ADD_PROPERTY_TYPE(KinkLength,(prefKinkLength()),"",(App::PropertyType)(App::Prop_None),
+                                  "Distance from symbol to leader kink");
+
     OriginIsSet.setStatus(App::Property::Hidden,false);
     OriginIsSet.setStatus(App::Property::ReadOnly,true);
 
-    sourceView.setScope(App::LinkScope::Global);
-//    sourceView.setStatus(App::Property::Hidden,true);
+    SourceView.setScope(App::LinkScope::Global);
     Rotation.setStatus(App::Property::Hidden,true);
-//    ScaleType.setStatus(App::Property::Hidden,true);
-//    Scale.setStatus(App::Property::Hidden,true);
     Caption.setStatus(App::Property::Hidden,true);
-//    X.setStatus(App::Property::Hidden,true);
-//    Y.setStatus(App::Property::Hidden,true);
 }
 
 DrawViewBalloon::~DrawViewBalloon()
@@ -120,12 +142,63 @@ DrawViewBalloon::~DrawViewBalloon()
 
 void DrawViewBalloon::onChanged(const App::Property* prop)
 {
+    if (!isRestoring()) {
+        if ( (prop == &EndType) ||
+             (prop == &Symbol)  ||
+             (prop == &Text)    ||
+             (prop == &KinkLength) ) {
+            requestPaint();
+        }
+    }
     DrawView::onChanged(prop);
 }
 
-void DrawViewBalloon::onDocumentRestored()
+void DrawViewBalloon::handleChangedPropertyName(Base::XMLReader &reader, const char * TypeName, const char *PropName)
 {
+    // was sourceView in the past, now is SourceView
+    Base::Type type = Base::Type::fromName(TypeName);
+    if (SourceView.getClassTypeId() == type && strcmp(PropName, "sourceView") == 0) {
+        SourceView.Restore(reader);
+    }
+    else {
+        DrawView::handleChangedPropertyName(reader, TypeName, PropName);
+    }
+}
 
+void DrawViewBalloon::handleChangedPropertyType(Base::XMLReader &reader, const char *TypeName, App::Property *prop)
+// transforms properties that had been changed
+{
+    // also check for changed properties of the base class
+    DrawView::handleChangedPropertyType(reader, TypeName, prop);
+
+    // property OriginX had the App::PropertyFloat and was changed to App::PropertyDistance
+    if ( (prop == &OriginX) && 
+         (strcmp(TypeName, "App::PropertyFloat") == 0) )  {
+        App::PropertyFloat OriginXProperty;
+        // restore the PropertyFloat to be able to set its value
+        OriginXProperty.Restore(reader);
+        OriginX.setValue(OriginXProperty.getValue());
+    } else if ( (prop == &OriginX) && 
+                (strcmp(TypeName, "App::PropertyLength") == 0) )  {
+        App::PropertyLength OriginXProperty;
+        // restore the PropertyFloat to be able to set its value
+        OriginXProperty.Restore(reader);
+        OriginX.setValue(OriginXProperty.getValue());
+
+    // property OriginY had the App::PropertyFloat and was changed to App::PropertyDistance
+    } else if ( (prop == &OriginY) && 
+                (strcmp(TypeName, "App::PropertyFloat") == 0) )  {
+        App::PropertyFloat OriginYProperty;
+        // restore the PropertyFloat to be able to set its value
+        OriginYProperty.Restore(reader);
+        OriginY.setValue(OriginYProperty.getValue());
+    } else if ( (prop == &OriginY) && 
+                (strcmp(TypeName, "App::PropertyLength") == 0) )  {
+        App::PropertyLength OriginYProperty;
+        // restore the PropertyLength to be able to set its value
+        OriginYProperty.Restore(reader);
+        OriginY.setValue(OriginYProperty.getValue());
+    }
 }
 
 
@@ -151,9 +224,33 @@ short DrawViewBalloon::mustExecute() const
     return DrawView::mustExecute();
 }
 
+void DrawViewBalloon::handleXYLock(void) {
+    if (isLocked()) {
+        if (!OriginX.testStatus(App::Property::ReadOnly)) {
+            OriginX.setStatus(App::Property::ReadOnly, true);
+            OriginX.purgeTouched();
+        }
+        if (!OriginY.testStatus(App::Property::ReadOnly)) {
+            OriginY.setStatus(App::Property::ReadOnly, true);
+            OriginY.purgeTouched();
+        }
+    } else {
+        if (OriginX.testStatus(App::Property::ReadOnly)) {
+            OriginX.setStatus(App::Property::ReadOnly, false);
+            OriginX.purgeTouched();
+        }
+        if (OriginY.testStatus(App::Property::ReadOnly)) {
+            OriginY.setStatus(App::Property::ReadOnly, false);
+            OriginY.purgeTouched();
+        }
+    }
+    DrawView::handleXYLock();
+}
+
+
 DrawViewPart* DrawViewBalloon::getViewPart() const
 {
-    App::DocumentObject* obj = sourceView.getValue();
+    App::DocumentObject* obj = SourceView.getValue();
     DrawViewPart* result = dynamic_cast<DrawViewPart*>(obj);
     return result;
 }
@@ -163,6 +260,16 @@ App::DocumentObjectExecReturn *DrawViewBalloon::execute(void)
     requestPaint();
     return App::DocumentObject::execute();
 }
+
+double DrawViewBalloon::prefKinkLength(void) const
+{
+    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter().
+                                         GetGroup("BaseApp")->GetGroup("Preferences")->
+                                         GetGroup("Mod/TechDraw/Dimensions");
+    double length = hGrp->GetFloat("BalloonKink", 5.0);
+    return length;
+}
+
 /*
 PyObject *DrawViewBalloon::getPyObject(void)
 {

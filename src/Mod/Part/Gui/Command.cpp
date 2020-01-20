@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2002     *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -59,7 +59,6 @@
 
 #include "../App/PartFeature.h"
 #include <Mod/Part/App/Part2DObject.h>
-#include "DlgPartImportStepImp.h"
 #include "DlgBooleanOperation.h"
 #include "DlgExtrusion.h"
 #include "DlgRevolution.h"

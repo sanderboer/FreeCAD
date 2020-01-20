@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) Jürgen Riegel          (juergen.riegel@web.de) 2008     *
+ *   Copyright (c) 2008 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -5287,7 +5287,7 @@ int SketchObject::addExternal(App::DocumentObject *Obj, const char* SubName)
 
     // add the new ones
     Objects.push_back(Obj);
-    SubElements.push_back(std::string(SubName));
+    SubElements.emplace_back(SubName);
 
     // set the Link list.
     ExternalGeometry.setValues(Objects,SubElements);

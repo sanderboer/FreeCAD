@@ -1,6 +1,6 @@
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2016 - Bernd Hahnebach <bernd@bimstatik.org>            *
+# *   Copyright (c) 2016 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -201,7 +201,7 @@ class GmshTools():
             else:
                 self.dimension = "0"
                 Console.PrintError(
-                    "Could not retrieve Dimension from shape type. Please choose dimension."
+                    "Could not retrieve Dimension from shape type. Please choose dimension.\n"
                 )
         elif self.dimension == "3D":
             self.dimension = "3"
@@ -552,7 +552,7 @@ class GmshTools():
                             setting["FacesList"] = belem_list
                         else:
                             Console.PrintError(
-                                "boundary layer is only supported for 2D and 3D mesh"
+                                "boundary layer is only supported for 2D and 3D mesh.\n"
                             )
                         self.bl_setting_list.append(setting)
                     else:
@@ -723,6 +723,20 @@ class GmshTools():
         geo.write("\n")
         geo.write("// mesh order\n")
         geo.write("Mesh.ElementOrder = " + self.order + ";\n")
+        if self.order == "2":
+            if (
+                hasattr(self.mesh_obj, "SecondOrderLinear")
+                and self.mesh_obj.SecondOrderLinear is True
+            ):
+                geo.write(
+                    "Mesh.SecondOrderLinear = 1; // Second order nodes are created "
+                    "by linear interpolation instead by curvilinear\n"
+                )
+            else:
+                geo.write(
+                    "Mesh.SecondOrderLinear = 0; // Second order nodes are created "
+                    "by linear interpolation instead by curvilinear\n"
+                )
         geo.write("\n")
 
         geo.write(
@@ -776,7 +790,7 @@ class GmshTools():
         geo.write("\n\n")
 
         # some useful information
-        geo.write("//////////////////////////////////////////////////////////////////////\n")
+        geo.write("// " + "*" * 70 + "\n")
         geo.write("// Gmsh documentation:\n")
         geo.write("// http://gmsh.info/doc/texinfo/gmsh.html#Mesh\n")
         geo.write("//\n")

@@ -1,7 +1,5 @@
 # -*- coding: utf8 -*-
-
 #***************************************************************************
-#*                                                                         *
 #*   Copyright (c) 2009 Yorik van Havre <yorik@uncreated.net>              *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
@@ -24,7 +22,7 @@
 
 __title__="FreeCAD Draft Workbench - GUI part"
 __author__ = "Yorik van Havre <yorik@uncreated.net>"
-__url__ = ["http://www.freecadweb.org"]
+__url__ = "https://www.freecadweb.org"
 
 ## @package DraftGui
 #  \ingroup DRAFT
@@ -38,68 +36,25 @@ __url__ = ["http://www.freecadweb.org"]
 Report to Draft.py for info
 """
 
+import os
 import six
+import sys
+import traceback
+import math
 import platform
-import FreeCAD, FreeCADGui, os, Draft, sys, traceback, DraftVecUtils, math
+import FreeCAD
+import FreeCADGui
+import Draft
+import DraftVecUtils
+from PySide import QtCore, QtGui, QtSvg
 
-try:
-    from PySide import QtCore, QtGui, QtSvg
-except ImportError:
-    FreeCAD.Console.PrintMessage("Error: Python-pyside package must be installed on your system to use the Draft module.")
 
-try:
-    _encoding = QtGui.QApplication.UnicodeUTF8 if six.PY2 else None
-    def translate(context, text, utf8_decode=True):
-        """convenience function for Qt translator
-            context: str
-                context is typically a class name (e.g., "MyDialog")
-            text: str
-                text which gets translated
-            utf8_decode: bool [False]
-                if set to true utf8 encoded unicode will be returned. This option does not have influence
-                on python3 as for python3 we are returning utf-8 encoded unicode by default!
-        """
-        if six.PY3:
-            return QtGui.QApplication.translate(context, text, None)
-        elif utf8_decode:
-            return QtGui.QApplication.translate(context, text, None, _encoding)
-        else:
-            return QtGui.QApplication.translate(context, text, None, _encoding).encode("utf8")
+import draftutils.translate
+translate = draftutils.translate.translate
 
-except AttributeError:
-    def translate(context, text, utf8_decode=False):
-        """convenience function for Qt translator
-            context: str
-                context is typically a class name (e.g., "MyDialog")
-            text: str
-                text which gets translated
-            utf8_decode: bool [False]
-                if set to true utf8 encoded unicode will be returned. This option does not have influence
-                on python3 as for python3 we are returning utf-8 encoded unicode by default!
-        """
-        if six.PY3:
-            return QtGui.QApplication.translate(context, text, None)
-        elif QtCore.qVersion() > "4":
-            if utf8_decode:
-                return QtGui.QApplication.translate(context, text, None)
-            else:
-                return QtGui.QApplication.translate(context, text, None).encode("utf8")
-        else:
-            if utf8_decode:
-                return QtGui.QApplication.translate(context, text, None, _encoding)
-            else:
-                return QtGui.QApplication.translate(context, text, None, _encoding).encode("utf8")
 
-def utf8_decode(text):
-    """py2: str     -> unicode
-            unicode -> unicode
-       py3: str     -> str
-            bytes   -> str
-    """
-    try:
-        return text.decode("utf-8")
-    except AttributeError:
-        return text
+import draftutils.utils
+utf8_decode = draftutils.utils.utf8_decode
 
 
 # in-command shortcut definitions: Shortcut / Translation / related UI control
@@ -126,92 +81,8 @@ inCommandShortcuts = {
     "NearSnap":       [Draft.getParam("inCommandShortcutNearSnap", "N"),translate("draft","Toggle near snap on/off"), None],
 }
 
-
-class todo:
-    """static todo class, delays execution of functions.  Use todo.delay
-    to schedule geometry manipulation that would crash coin if done in the
-    event callback
-
-    List of (function, argument) pairs to be executed by
-    QtCore.QTimer.singleShot(0,doTodo).
-    """
-    itinerary = []
-    commitlist = []
-    afteritinerary = []
-
-    @staticmethod
-    def doTasks():
-        #print("debug: doing delayed tasks: commitlist: ",todo.commitlist," itinerary: ",todo.itinerary)
-        try:
-            for f, arg in todo.itinerary:
-                try:
-                    # print("debug: executing",f)
-                    if arg or (arg == False):
-                        f(arg)
-                    else:
-                        f()
-                except:
-                    FreeCAD.Console.PrintLog (traceback.format_exc())
-                    wrn = "[Draft.todo.tasks] Unexpected error:", sys.exc_info()[0], "in ", f, "(", arg, ")"
-                    FreeCAD.Console.PrintWarning (wrn)
-        except ReferenceError:
-            print("Debug: DraftGui.todo.doTasks: queue contains a deleted object, skipping")
-        todo.itinerary = []
-        if todo.commitlist:
-            for name,func in todo.commitlist:
-                if six.PY2:
-                    if isinstance(name,six.text_type):
-                        name = name.encode("utf8")
-                #print("debug: committing ",str(name))
-                try:
-                    name = str(name)
-                    FreeCAD.ActiveDocument.openTransaction(name)
-                    if isinstance(func,list):
-                        for l in func:
-                            FreeCADGui.doCommand(l)
-                    else:
-                        func()
-                    FreeCAD.ActiveDocument.commitTransaction()
-                except:
-                    FreeCAD.Console.PrintLog (traceback.format_exc())
-                    wrn = "[Draft.todo.commit] Unexpected error:", sys.exc_info()[0], "in ", func
-                    FreeCAD.Console.PrintWarning (wrn)
-            # restack Draft screen widgets after creation
-            if hasattr(FreeCADGui,"Snapper"):
-                FreeCADGui.Snapper.restack()
-        todo.commitlist = []
-        for f, arg in todo.afteritinerary:
-            try:
-                # print("debug: executing",f)
-                if arg:
-                    f(arg)
-                else:
-                    f()
-            except:
-                FreeCAD.Console.PrintLog (traceback.format_exc())
-                wrn = "[Draft.todo.tasks] Unexpected error:", sys.exc_info()[0], "in ", f, "(", arg, ")"
-                FreeCAD.Console.PrintWarning (wrn)
-        todo.afteritinerary = []
-
-    @staticmethod
-    def delay (f, arg):
-        # print("debug: delaying",f)
-        if todo.itinerary == []:
-            QtCore.QTimer.singleShot(0, todo.doTasks)
-        todo.itinerary.append((f,arg))
-
-    @staticmethod
-    def delayCommit (cl):
-        # print("debug: delaying commit",cl)
-        QtCore.QTimer.singleShot(0, todo.doTasks)
-        todo.commitlist = cl
-
-    @staticmethod
-    def delayAfter (f, arg):
-        # print("debug: delaying",f)
-        if todo.afteritinerary == []:
-            QtCore.QTimer.singleShot(0, todo.doTasks)
-        todo.afteritinerary.append((f,arg))
+import draftutils.todo
+todo = draftutils.todo.ToDo
 
 #---------------------------------------------------------------------------
 # UNITS handling
@@ -691,7 +562,7 @@ class DraftToolBar:
 
 
         # following lines can cause a crash and are not needed anymore when using the task panel
-        # http://forum.freecadweb.org/viewtopic.php?f=3&t=6952
+        # https://forum.freecadweb.org/viewtopic.php?f=3&t=6952
         #QtCore.QObject.connect(self.FFileValue,QtCore.SIGNAL("escaped()"),self.escape)
         #QtCore.QObject.connect(self.xValue,QtCore.SIGNAL("escaped()"),self.escape)
         #QtCore.QObject.connect(self.yValue,QtCore.SIGNAL("escaped()"),self.escape)

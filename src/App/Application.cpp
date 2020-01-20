@@ -1,5 +1,5 @@
 /***************************************************************************
- *   (c) Juergen Riegel (juergen.riegel@web.de) 2002                       *
+ *   Copyright (c) 2002 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -19,7 +19,6 @@
  *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
  *   USA                                                                   *
  *                                                                         *
- *   Juergen Riegel 2002                                                   *
  ***************************************************************************/
 
 
@@ -81,6 +80,7 @@
 #include <Base/UnitsApi.h>
 #include <Base/QuantityPy.h>
 #include <Base/UnitPy.h>
+#include <Base/TypePy.h>
 
 #include "GeoFeature.h"
 #include "FeatureTest.h"
@@ -303,6 +303,7 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     Base::Interpreter().addType(&Base::RotationPy        ::Type,pBaseModule,"Rotation");
     Base::Interpreter().addType(&Base::AxisPy            ::Type,pBaseModule,"Axis");
     Base::Interpreter().addType(&Base::CoordinateSystemPy::Type,pBaseModule,"CoordinateSystem");
+    Base::Interpreter().addType(&Base::TypePy            ::Type,pBaseModule,"TypeId");
 
     Base::Interpreter().addType(&App::MaterialPy::Type, pAppModule, "Material");
 
@@ -1081,6 +1082,16 @@ void Application::addImportType(const char* Type, const char* ModuleName)
     }
 }
 
+void Application::changeImportModule(const char* Type, const char* OldModuleName, const char* NewModuleName)
+{
+    for (auto& it : _mImportTypes) {
+        if (it.filter == Type && it.module == OldModuleName) {
+            it.module = NewModuleName;
+            break;
+        }
+    }
+}
+
 std::vector<std::string> Application::getImportModules(const char* Type) const
 {
     std::vector<std::string> modules;
@@ -1191,6 +1202,16 @@ void Application::addExportType(const char* Type, const char* ModuleName)
     }
     else {
         _mExportTypes.push_back(item);
+    }
+}
+
+void Application::changeExportModule(const char* Type, const char* OldModuleName, const char* NewModuleName)
+{
+    for (auto& it : _mExportTypes) {
+        if (it.filter == Type && it.module == OldModuleName) {
+            it.module = NewModuleName;
+            break;
+        }
     }
 }
 

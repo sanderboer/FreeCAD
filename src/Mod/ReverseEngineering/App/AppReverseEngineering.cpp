@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) 2008 Jürgen Riegel (juergen.riegel@web.de)              *
+ *   Copyright (c) 2008 Jürgen Riegel <juergen.riegel@web.de>              *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -218,10 +218,10 @@ private:
                 pts.reserve(l.size());
                 for (Py::Sequence::iterator it = l.begin(); it != l.end(); ++it) {
                     Py::Tuple t(*it);
-                    pts.push_back(Base::Vector3f(
+                    pts.emplace_back(
                         (float)Py::Float(t.getItem(0)),
                         (float)Py::Float(t.getItem(1)),
-                        (float)Py::Float(t.getItem(2)))
+                        (float)Py::Float(t.getItem(2))
                     );
                 }
             }

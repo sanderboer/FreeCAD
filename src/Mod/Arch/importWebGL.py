@@ -1,7 +1,5 @@
 #***************************************************************************
-#*                                                                         *
-#*   Copyright (c) 2013                                                    *  
-#*   Yorik van Havre <yorik@uncreated.net>                                 *  
+#*   Copyright (c) 2013 Yorik van Havre <yorik@uncreated.net>              *
 #*                                                                         *
 #*   This program is free software; you can redistribute it and/or modify  *
 #*   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -165,7 +163,7 @@ def getObjectData(obj,wireframeMode=wireframeStyle):
     result = ""
     wires = []
 
-    if obj.isDerivedFrom("Part::Feature"):
+    if hasattr(obj,'Shape'):
         fcmesh = obj.Shape.tessellate(0.1)
         result = "var geom = new THREE.Geometry();\n"
         # adding vertices data
