@@ -16,10 +16,22 @@ INSTALL_DIR="/opt/freecad-${TODAY}"
 # PY_LIB="${MAUCPY}/lib/libpython3.7m.so"
 
 
-PY_EXE="/usr/bin/python3.6"
-PPY_LIB="/usr/lib/libpython3.6m"
-PPY_LIB_PATH="/usr/lib/python3.6"
-PPY_INC="/usr/include/python3.6m/Python.h"
+# PY_EXE="/usr/bin/python3"
+# PPY_LIB="/usr/lib/libpython3.so"
+# PPY_LIB_PATH="/usr/lib/python3.8"
+# PPY_INC="/usr/include/python3.8/Python.h"
+
+PY_ROOT="/usr"
+PY_EXE="${PY_ROOT}/bin/python3"
+PY_LIB="${PY_ROOT}/lib/libpython3.so"
+PY_LIB_PATH="${PY_ROOT}/lib/python3.8"
+PY_INC="${PY_ROOT}/include/python3.8/Python.h"
+
+
+# PY_EXE="${PY_ROOT}/bin/python3.7m"
+# PPY_LIB="${PY_ROOT}/lib/libpython3.7m.a"
+# PPY_LIB_PATH="${PY_ROOT}/lib/python3.7"
+# PPY_INC="${PY_ROOT}/include/python3.7m/Python.h"
 
 
 
