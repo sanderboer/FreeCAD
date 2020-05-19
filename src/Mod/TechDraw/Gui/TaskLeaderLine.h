@@ -89,6 +89,7 @@ public:
     void saveButtons(QPushButton* btnOK,
                      QPushButton* btnCancel);
     void enableTaskButtons(bool b);
+    void recomputeFeature();
 
 
 protected Q_SLOTS:
@@ -113,11 +114,20 @@ protected:
     void enableVPUi(bool b);
     void setEditCursor(QCursor c);
 
-   QGIView* findParentQGIV();
-   int getPrefArrowStyle();
+    QGIView* findParentQGIV();
+    int getPrefArrowStyle();
+    double prefWeight() const;
+    App::Color prefLineColor(void);
 
    void saveState(void);
    void restoreState(void);
+
+private Q_SLOTS:
+    void onStartSymbolChanged();
+    void onEndSymbolChanged();
+    void onColorChanged();
+    void onLineWidthChanged();
+    void onLineStyleChanged();
 
 private:
     Ui_TaskLeaderLine * ui;
@@ -156,6 +166,8 @@ private:
     std::vector<Base::Vector3d> m_savePoints;
     double m_saveX;
     double m_saveY;
+
+    bool m_haveMdi;
 };
 
 class TaskDlgLeaderLine : public Gui::TaskView::TaskDialog

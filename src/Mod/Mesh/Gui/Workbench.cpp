@@ -202,6 +202,7 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     *mesh << "Mesh_Import"
           << "Mesh_Export"
           << "Mesh_FromPartShape"
+          << "Mesh_RemeshGmsh"
           << "Separator"
           << analyze
           << "Mesh_VertexCurvature"
@@ -217,6 +218,7 @@ Gui::MenuItem* Workbench::setupMenuBar() const
           << "Mesh_SegmentationBestFit"
           << "Separator"
           << "Mesh_Smoothing"
+          << "Mesh_Decimating"
           << "Mesh_Scale"
           << "Separator"
           << "Mesh_BuildRegularSolid"

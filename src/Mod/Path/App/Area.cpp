@@ -65,6 +65,7 @@
 # include <gp_GTrsf.hxx>
 # include <Standard_Version.hxx>
 # include <GCPnts_QuasiUniformDeflection.hxx>
+# include <GCPnts_UniformDeflection.hxx>
 # include <GCPnts_UniformAbscissa.hxx>
 # include <BRepBndLib.hxx>
 # include <BRepLib_MakeFace.hxx>
@@ -133,6 +134,20 @@ CAreaParams::CAreaParams()
 AreaParams::AreaParams()
     :PARAM_INIT(PARAM_FNAME,AREA_PARAMS_AREA)
 {}
+
+void AreaParams::dump(const char *msg) const {
+
+#define AREA_PARAM_PRINT(_param) \
+    ss << PARAM_FNAME_STR(_param) << " = " << PARAM_FNAME(_param) << '\n';
+
+    if(FC_LOG_INSTANCE.level()>FC_LOGLEVEL_TRACE) {
+        std::ostringstream ss;
+        ss << msg << '\n';
+        PARAM_FOREACH(AREA_PARAM_PRINT, AREA_PARAMS_AREA)
+
+        FC_MSG(ss.str());
+    }
+}
 
 CAreaConfig::CAreaConfig(const CAreaParams &p, bool noFitArcs)
 {
@@ -342,7 +357,12 @@ static std::vector<gp_Pnt> discretize(const TopoDS_Edge &edge, double deflection
     // same for any other discetization algorithm, althgouth it seems only
     // QuasiUniformDeflection has this bug.
 
-    GCPnts_QuasiUniformDeflection discretizer(curve, deflection, first, last);
+    // NOTE: QuasiUniformDeflection has trouble with some B-Spline, see
+    // https://forum.freecadweb.org/viewtopic.php?f=15&t=42628
+    //
+    // GCPnts_QuasiUniformDeflection discretizer(curve, deflection, first, last);
+    //
+    GCPnts_UniformDeflection discretizer(curve, deflection, first, last);
     if (!discretizer.IsDone ())
         Standard_Failure::Raise("Curve discretization failed");
     if(discretizer.NbPoints () > 1) {
@@ -871,7 +891,9 @@ struct WireJoiner {
             if(info.p1.SquareDistance(info.p2)<tol)
 #endif
             {
-                builder.Add(comp,BRepBuilderAPI_MakeWire(info.edge).Wire());
+                auto wire = BRepBuilderAPI_MakeWire(info.edge).Wire();
+                Area::showShape(wire,"closed");
+                builder.Add(comp,wire);
                 ++count;
                 continue;
             }
@@ -996,6 +1018,7 @@ struct WireJoiner {
                 TopoDS_Wire wire = makeCleanWire(wireData,0.01);
                 if(!BRep_Tool::IsClosed(wire)) {
                     FC_WARN("failed to close some projection wire");
+                    Area::showShape(wire,"failed");
                     ++skips;
                 }else{
                     for(auto &r : stack) {
@@ -1115,37 +1138,61 @@ static void showShapes(const T &shapes, const char *name, const char *fmt=0, ...
 }
 
 template<class Func>
-static int foreachSubshape(const TopoDS_Shape &shape, Func func, int type=TopAbs_FACE) {
-    bool haveShape = false;
+static int foreachSubshape(const TopoDS_Shape &shape,
+        Func func, int type=TopAbs_FACE, bool groupOpenEdges=false)
+{
+    int res = -1;
+    std::vector<TopoDS_Shape> openShapes;
     switch(type) {
     case TopAbs_SOLID:
         for(TopExp_Explorer it(shape,TopAbs_SOLID); it.More(); it.Next()) {
-            haveShape = true;
+            res = TopAbs_SOLID;
             func(it.Current(),TopAbs_SOLID);
         }
-        if(haveShape) return TopAbs_SOLID;
+        if(res>=0) break;
         //fall through
     case TopAbs_FACE:
         for(TopExp_Explorer it(shape,TopAbs_FACE); it.More(); it.Next()) {
-            haveShape = true;
+            res = TopAbs_FACE;
             func(it.Current(),TopAbs_FACE);
         }
-        if(haveShape) return TopAbs_FACE;
+        if(res>=0) break;
         //fall through
     case TopAbs_WIRE:
-        for(TopExp_Explorer it(shape,TopAbs_WIRE); it.More(); it.Next()) {
-            haveShape = true;
-            func(it.Current(),TopAbs_WIRE);
+        for(TopExp_Explorer it(shape, TopAbs_WIRE); it.More(); it.Next()) {
+            res = TopAbs_WIRE;
+            if(groupOpenEdges && !BRep_Tool::IsClosed(TopoDS::Wire(it.Current())))
+                openShapes.push_back(it.Current());
+            else
+                func(it.Current(),TopAbs_WIRE);
         }
-        if(haveShape) return TopAbs_WIRE;
+        if(res>=0) break;
         //fall through
     default:
         for(TopExp_Explorer it(shape,TopAbs_EDGE); it.More(); it.Next()) {
-            haveShape = true;
+            res = TopAbs_EDGE;
+            if(groupOpenEdges) {
+                TopoDS_Edge e = TopoDS::Edge(it.Current());
+                gp_Pnt p1,p2;
+                getEndPoints(e,p1,p2);
+                if(p1.SquareDistance(p2) > Precision::SquareConfusion()) {
+                    openShapes.push_back(it.Current());
+                    continue;
+                }
+            }
             func(it.Current(),TopAbs_EDGE);
         }
     }
-    return haveShape?TopAbs_EDGE:-1;
+    if(openShapes.empty())
+        return res;
+ 
+    BRep_Builder builder;
+    TopoDS_Compound comp;
+    builder.MakeCompound(comp);
+    for(auto &s : openShapes)
+        builder.Add(comp,s);
+    func(comp, TopAbs_COMPOUND);
+    return TopAbs_COMPOUND;
 }
 
 struct FindPlane {
@@ -1265,6 +1312,8 @@ int Area::project(TopoDS_Shape &shape_out,
     int skips = joiner.findClosedWires();
     FC_TIME_LOG(t1,"WireJoiner findClosedWires");
 
+    showShape(joiner.comp,"pre_project");
+
     Area area(params);
     area.myParams.SectionCount = 0;
     area.myParams.Offset = 0.0;
@@ -1278,6 +1327,9 @@ int Area::project(TopoDS_Shape &shape_out,
     area.myProjecting = true;
     area.add(joiner.comp, OperationUnion);
     const TopoDS_Shape &shape = area.getShape();
+
+    area.myParams.dump("project");
+
     showShape(shape,"projected");
 
     FC_TIME_LOG(t1,"Clipper wire union");
@@ -2922,7 +2974,7 @@ std::list<TopoDS_Shape> Area::sortWires(const std::list<TopoDS_Shape> &shapes,
             //explode the shape
             if(!shape.IsNull()){
                 foreachSubshape(shape,ShapeInfoBuilder(
-                    arcPlaneFound,arc_plane,trsf,shape_list,rparams));
+                    arcPlaneFound,arc_plane,trsf,shape_list,rparams),TopAbs_FACE,true);
             }
         }
         FC_TIME_LOG(t1,"plane finding");
@@ -3113,29 +3165,13 @@ static inline void addG1(bool verbose,Toolpath &path, const gp_Pnt &last,
 
 static void addG0(bool verbose, Toolpath &path,
         gp_Pnt last, const gp_Pnt &next,
-        AxisGetter getter, AxisSetter setter,
-        double retraction, double resume_height,
-        double f, double &last_f)
+        AxisSetter setter, double height)
 {
-    gp_Pnt pt(last);
-    if(retraction-(last.*getter)() > Precision::Confusion()) {
-        (pt.*setter)(retraction);
-        addGCode(verbose,path,last,pt,"G0");
-        last = pt;
-        pt = next;
-        (pt.*setter)(retraction);
+    gp_Pnt pt(next);
+    (pt.*setter)(height);
+    if(!last.IsEqual(pt, Precision::Confusion())){
         addGCode(verbose,path,last,pt,"G0");
     }
-    if(resume_height>Precision::Confusion()) {
-        if(resume_height+(next.*getter)() < retraction) {
-            last = pt;
-            pt = next;
-            (pt.*setter)((next.*getter)()+resume_height);
-            addGCode(verbose,path,last,pt,"G0");
-        }
-        addG1(verbose,path,pt,next,f,last_f);
-    }else
-        addGCode(verbose,path,pt,next,"G0");
 }
 
 static void addGArc(bool verbose,bool abs_center, Toolpath &path,
@@ -3251,15 +3287,20 @@ void Area::toPath(Toolpath &path, const std::list<TopoDS_Shape> &shapes,
     addGCode(false,path,plast,p,"G0");
     plast = p;
     p = pstart;
-    // rapid horizontal move if start Z is below retraction
+
+    // rapid horizontal move to start point
     if(fabs((p.*getter)()-retraction) > Precision::Confusion()) {
+        // check if last is equal to current, if it is change last so the initial G0 is still emitted
+        gp_Pnt tmpPlast = plast;
+        (tmpPlast.*setter)((p.*getter)());
+        if(_pstart && p.IsEqual(tmpPlast, Precision::Confusion())){
+            plast.SetCoord(10.0, 10.0, 10.0);
+            (plast.*setter)(retraction);
+        }
         (p.*setter)(retraction);
         addGCode(false,path,plast,p,"G0");
-        plast = p;
-        p = pstart;
     }
-    // vertical rapid down to feed start
-    addGCode(false,path,plast,p,"G0");
+    
 
     plast = p;
     bool first = true;
@@ -3282,10 +3323,20 @@ void Area::toPath(Toolpath &path, const std::list<TopoDS_Shape> &shapes,
         (pTmp.*setter)(0.0);
         (plastTmp.*setter)(0.0);
 
-        if(!first && pTmp.SquareDistance(plastTmp)>threshold)
-            addG0(verbose,path,plast,p,getter,setter,retraction,resume_height,vf,cur_f);
-        else
-            addG1(verbose,path,plast,p,vf,cur_f);
+        if(first) {
+            // G0 to initial at retraction to handle if start point was set
+            addG0(false,path,plast,p,setter, retraction);
+            // rapid to plunge height
+            addG0(false,path,plast,p,setter, resume_height);
+        }else if(pTmp.SquareDistance(plastTmp)>threshold){
+            // raise to retraction height
+            addG0(false,path,plast,plast,setter, retraction);
+            // move to new location
+            addG0(false,path,plast,p,setter, retraction);
+            // lower to plunge height
+            addG0(false,path,plast,p,setter, resume_height);
+        }
+        addG1(verbose,path,plast,p,vf,cur_f);
         plast = p;
         first = false;
         for(;xp.More();xp.Next(),plast=p) {

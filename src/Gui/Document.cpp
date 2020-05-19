@@ -287,6 +287,14 @@ bool Document::setEdit(Gui::ViewProvider* p, int ModNum, const char *subname)
         FC_ERR("cannot edit non ViewProviderDocumentObject");
         return false;
     }
+
+    // Fix regression: https://forum.freecadweb.org/viewtopic.php?f=19&t=43629&p=371972#p371972
+    // When an object is already in edit mode a subsequent call for editing is only possible
+    // when resetting the currently edited object.
+    if (d->_editViewProvider) {
+        _resetEdit();
+    }
+
     auto obj = vp->getObject();
     if(!obj->getNameInDocument()) {
         FC_ERR("cannot edit detached object");
@@ -462,7 +470,12 @@ void Document::_resetEdit(void)
         }
 
         d->_editViewProvider->finishEditing();
-        if (d->_editViewProvider->isDerivedFrom(ViewProviderDocumentObject::getClassTypeId())) 
+
+        // Have to check d->_editViewProvider below, because there is a chance
+        // the editing object gets deleted inside the above call to
+        // 'finishEditing()', which will trigger our slotDeletedObject(), which
+        // nullifies _editViewProvider.
+        if (d->_editViewProvider && d->_editViewProvider->isDerivedFrom(ViewProviderDocumentObject::getClassTypeId())) 
             signalResetEdit(*(static_cast<ViewProviderDocumentObject*>(d->_editViewProvider)));
         d->_editViewProvider = 0;
 
@@ -1118,7 +1131,7 @@ void Document::saveAll() {
     }catch(Base::Exception &e) {
         e.ReportException();
         int ret = QMessageBox::critical(getMainWindow(), QObject::tr("Failed to save document"),
-                QObject::tr("Documents contains cyclic dependices. Do you still want to save them?"),
+                QObject::tr("Documents contains cyclic dependencies. Do you still want to save them?"),
                 QMessageBox::Yes,QMessageBox::No);
         if(ret!=QMessageBox::Yes)
             return;
@@ -1203,14 +1216,16 @@ void Document::Save (Base::Writer &writer) const
     if (writer.isForceXML() == false) {
         writer.addFile("GuiDocument.xml", this);
 
-        if (App::GetApplication().GetParameterGroupByPath
-            ("User parameter:BaseApp/Preferences/Document")->GetBool("SaveThumbnail",false)) {
+        ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Document");
+        if (hGrp->GetBool("SaveThumbnail", false)) {
+            int size = hGrp->GetInt("ThumbnailSize", 128);
+            size = Base::clamp<int>(size, 64, 512);
             std::list<MDIView*> mdi = getMDIViews();
             for (std::list<MDIView*>::iterator it = mdi.begin(); it != mdi.end(); ++it) {
                 if ((*it)->getTypeId().isDerivedFrom(View3DInventor::getClassTypeId())) {
                     View3DInventorViewer* view = static_cast<View3DInventor*>(*it)->getViewer();
                     d->thumb.setFileName(d->_pcDocument->FileName.getValue());
-                    d->thumb.setSize(128);
+                    d->thumb.setSize(size);
                     d->thumb.setViewer(view);
                     d->thumb.Save(writer);
                     break;

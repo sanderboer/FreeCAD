@@ -45,6 +45,7 @@
 #include "DrawProjGroup.h"
 #include "DrawProjGroupItem.h"
 #include "DrawLeaderLine.h"
+#include "Preferences.h"
 #include "DrawUtil.h"
 #include "Geometry.h"
 #include "Cosmetic.h"
@@ -65,7 +66,7 @@ const char* DrawView::ScaleTypeEnums[]= {"Page",
                                          NULL};
 App::PropertyFloatConstraint::Constraints DrawView::scaleRange = {Precision::Confusion(),
                                                                   std::numeric_limits<double>::max(),
-                                                                  pow(10,- Base::UnitsApi::getDecimals())};
+                                                                  (0.1)}; // increment by 0.1
 
 
 PROPERTY_SOURCE(TechDraw::DrawView, App::DocumentObject)
@@ -75,17 +76,17 @@ DrawView::DrawView(void):
     mouseMove(false)
 {
     static const char *group = "Base";
-    ADD_PROPERTY_TYPE(X, (0.0), group, App::Prop_None, "X position");
-    ADD_PROPERTY_TYPE(Y, (0.0), group, App::Prop_None, "Y position");
-    ADD_PROPERTY_TYPE(LockPosition, (false), group, App::Prop_None, "Lock View position to parent Page or Group");
-    ADD_PROPERTY_TYPE(Rotation, (0.0), group, App::Prop_None, "Rotation in degrees counterclockwise");
+    ADD_PROPERTY_TYPE(X, (0.0), group, (App::PropertyType)(App::Prop_Output | App::Prop_NoRecompute), "X position");
+    ADD_PROPERTY_TYPE(Y, (0.0), group, (App::PropertyType)(App::Prop_Output | App::Prop_NoRecompute), "Y position");
+    ADD_PROPERTY_TYPE(LockPosition, (false), group, App::Prop_Output, "Lock View position to parent Page or Group");
+    ADD_PROPERTY_TYPE(Rotation, (0.0), group, App::Prop_Output, "Rotation in degrees counterclockwise");
 
     ScaleType.setEnums(ScaleTypeEnums);
-    ADD_PROPERTY_TYPE(ScaleType, ((long)0), group, App::Prop_None, "Scale Type");
-    ADD_PROPERTY_TYPE(Scale, (1.0), group, App::Prop_None, "Scale factor of the view");
+    ADD_PROPERTY_TYPE(ScaleType, (prefScaleType()), group, App::Prop_Output, "Scale Type");
+    ADD_PROPERTY_TYPE(Scale, (prefScale()), group, App::Prop_Output, "Scale factor of the view");
     Scale.setConstraints(&scaleRange);
 
-    ADD_PROPERTY_TYPE(Caption, (""), group, App::Prop_None, "Short text about the view");
+    ADD_PROPERTY_TYPE(Caption, (""), group, App::Prop_Output, "Short text about the view");
 }
 
 DrawView::~DrawView()
@@ -94,10 +95,17 @@ DrawView::~DrawView()
 
 App::DocumentObjectExecReturn *DrawView::execute(void)
 {
-//    Base::Console().Message("DV::execute() - %s\n", getNameInDocument());
+//    Base::Console().Message("DV::execute() - %s touched: %d\n", getNameInDocument(), isTouched());
+    if (findParentPage() == nullptr) {
+        return App::DocumentObject::execute();
+    }
     handleXYLock();
     requestPaint();
-    return App::DocumentObject::execute();
+    //documentobject::execute doesn't do anything useful for us.
+    //documentObject::recompute causes an infinite loop.
+    //should not be necessary to purgeTouched here, but it prevents a superfluous feature recompute
+    purgeTouched();                           //this should not be necessary!
+    return App::DocumentObject::StdReturn;
 }
 
 void DrawView::checkScale(void)
@@ -116,6 +124,9 @@ void DrawView::checkScale(void)
 
 void DrawView::onChanged(const App::Property* prop)
 {
+//Coding note: calling execute, recompute or recomputeFeature inside an onChanged
+//method can create infinite loops.  In general don't do this!  There may be 
+//situations where it is OK, but careful analysis is a must. 
     if (!isRestoring()) {
         if (prop == &ScaleType) {
             auto page = findParentPage();
@@ -142,7 +153,15 @@ void DrawView::onChanged(const App::Property* prop)
             }
         } else if (prop == &LockPosition) {
             handleXYLock();
+            requestPaint();         //change lock icon
             LockPosition.purgeTouched(); 
+        } else if ((prop == &Caption) ||
+            (prop == &Label)) {
+            requestPaint();
+        } else if ((prop == &X) ||
+            (prop == &Y)) {
+            X.purgeTouched();
+            Y.purgeTouched();
         }
     }
     App::DocumentObject::onChanged(prop);
@@ -187,11 +206,7 @@ short DrawView::mustExecute() const
     short result = 0;
     if (!isRestoring()) {
         result  =  (Scale.isTouched()  ||
-                    ScaleType.isTouched() ||
-                    Caption.isTouched() ||
-                    X.isTouched() ||
-                    Y.isTouched() ||
-                    LockPosition.isTouched());
+                    ScaleType.isTouched());
     }
     if ((bool) result) {
         return result;
@@ -262,30 +277,60 @@ DrawViewClip* DrawView::getClipGroup(void)
     return result;
 }
 
-
-double DrawView::autoScale(double w, double h) const
+double DrawView::autoScale(void) const
 {
-    double fudgeFactor = 0.90;
-    QRectF viewBox = getRect();
+    auto page = findParentPage();
+    double w = page->getPageWidth();
+    double h = page->getPageHeight();
+    return autoScale(w,h);
+}
+
+//compare 1:1 rect of view to pagesize(pw,h) 
+double DrawView::autoScale(double pw, double ph) const
+{
+//    Base::Console().Message("DV::autoScale(Page: %.3f, %.3f) - %s\n", pw, ph, getNameInDocument());
+    double fudgeFactor = 1.0;  //make it a bit smaller just in case.
+    QRectF viewBox = getRect();           //getRect is scaled (ie current actual size)
+    if (!viewBox.isValid()) {
+        return 1.0;
+    }
     //have to unscale rect to determine new scale
     double vbw = viewBox.width()/getScale();
     double vbh = viewBox.height()/getScale();
-    double xScale = w/vbw;
-    double yScale = h/vbh;
-    //TODO: find a standard scale that's close? 1:2, 1:10, 1:100...?  Logic in TaskProjGroup
-    double newScale = fudgeFactor * std::min(xScale,yScale);
-    newScale = DrawUtil::sensibleScale(newScale);
-    return newScale;
+    double xScale = pw/vbw;           // > 1 page bigger than figure
+    double yScale = ph/vbh;           // < 1 page is smaller than figure
+    double newScale = std::min(xScale,yScale) * fudgeFactor; 
+    double sensibleScale = DrawUtil::sensibleScale(newScale);
+    return sensibleScale;
 }
 
-//!check if View fits on Page
+bool DrawView::checkFit(void) const
+{
+    auto page = findParentPage();
+    return checkFit(page);
+}
+
+//!check if View is too big for page
+//should check if unscaled rect is too big for page
 bool DrawView::checkFit(TechDraw::DrawPage* p) const
 {
     bool result = true;
-    QRectF viewBox = getRect();
-    if ( (viewBox.width() > p->getPageWidth()) ||
-         (viewBox.height() > p->getPageHeight()) ) {
-        result = false;
+    double fudge = 1.1;
+
+    double width = 0.0;
+    double height = 0.0;
+    QRectF viewBox = getRect();    //rect is scaled
+    if (!viewBox.isValid()) {
+        result = true;
+    } else {
+        width = viewBox.width() / getScale();        //unscaled rect w x h
+        height = viewBox.height() / getScale(); 
+        width *= fudge;
+        height *= fudge;
+        if ( (width > p->getPageWidth()) ||
+             (height > p->getPageHeight()) ) {
+            result = false;
+        }
     }
     return result;
 }
@@ -404,6 +449,7 @@ void DrawView::handleChangedPropertyType(
 
 bool DrawView::keepUpdated(void)
 {
+//    Base::Console().Message("DV::keepUpdated() - %s\n", getNameInDocument());
     bool result = false;
 
     bool pageUpdate = false;
@@ -425,7 +471,22 @@ bool DrawView::keepUpdated(void)
     if (force) {         //when do we turn this off??
         result = true;
     }
+    return result;
+}
 
+int DrawView::prefScaleType(void)
+{
+    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
+          .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/TechDraw/General");
+    int result = hGrp->GetInt("DefaultScaleType", 0); 
+    return result;
+}
+
+double DrawView::prefScale(void)
+{
+    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
+          .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/TechDraw/General");
+    double result = hGrp->GetFloat("DefaultViewScale", 1.0); 
     return result;
 }
 

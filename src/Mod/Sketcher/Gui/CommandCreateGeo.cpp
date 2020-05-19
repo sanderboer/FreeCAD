@@ -231,7 +231,7 @@ void removeRedundantHorizontalVertical(Sketcher::SketchObject* psketch,
 /* Sketch commands =======================================================*/
 
 static const char cursor_crosshair_color_fmt[] = "+ c #%06lX";
-static char cursor_crosshair_color[12];
+char cursor_crosshair_color[12];
 
 void DrawSketchHandler::setCrosshairColor()
 {
@@ -6637,10 +6637,10 @@ namespace SketcherGui {
                         this->notAllowedReason = QT_TR_NOOP("This object is in another document.");
                         break;
                     case Sketcher::SketchObject::rlOtherBody:
-                        this->notAllowedReason = QT_TR_NOOP("This object belongs to another body. Hold Ctrl to allow crossreferences.");
+                        this->notAllowedReason = QT_TR_NOOP("This object belongs to another body. Hold Ctrl to allow cross-references.");
                         break;
                     case Sketcher::SketchObject::rlOtherBodyWithLinks:
-                        this->notAllowedReason = QT_TR_NOOP("This object belongs to another body and it contains external geometry. Crossreference not allowed.");
+                        this->notAllowedReason = QT_TR_NOOP("This object belongs to another body and it contains external geometry. Cross-reference not allowed.");
                         break;
                     case Sketcher::SketchObject::rlOtherPart:
                         this->notAllowedReason = QT_TR_NOOP("This object belongs to another part.");
@@ -7482,7 +7482,7 @@ CmdSketcherCreateRegularPolygon::CmdSketcherCreateRegularPolygon()
     sToolTipText    = QT_TR_NOOP("Create a regular polygon in the sketch");
     sWhatsThis      = "Sketcher_CreateRegularPolygon";
     sStatusTip      = sToolTipText;
-    sPixmap         = "CreateRegularPolygon";
+    sPixmap         = "Sketcher_CreateRegularPolygon";
     sAccel          = "";
     eType           = ForEdit;
 }
@@ -7490,7 +7490,11 @@ CmdSketcherCreateRegularPolygon::CmdSketcherCreateRegularPolygon()
 void CmdSketcherCreateRegularPolygon::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    ActivateHandler(getActiveGuiDocument(),new DrawSketchHandlerRegularPolygon(8) );
+
+    // Pop-up asking for values
+    SketcherRegularPolygonDialog srpd;
+    if (srpd.exec() == QDialog::Accepted)
+        ActivateHandler(getActiveGuiDocument(),new DrawSketchHandlerRegularPolygon(srpd.sides));
 }
 
 bool CmdSketcherCreateRegularPolygon::isActive(void)
@@ -7530,12 +7534,9 @@ void CmdSketcherCompCreateRegularPolygon::activated(int iMsg)
     case 6:
     {
         // Pop-up asking for values
-        SketcherRegularPolygonDialog * srpd = new SketcherRegularPolygonDialog();
-
-        if (srpd->exec() == QDialog::Accepted)
-            ActivateHandler(getActiveGuiDocument(),new DrawSketchHandlerRegularPolygon(srpd->sides));
-
-        delete srpd;
+        SketcherRegularPolygonDialog srpd;
+        if (srpd.exec() == QDialog::Accepted)
+            ActivateHandler(getActiveGuiDocument(),new DrawSketchHandlerRegularPolygon(srpd.sides));
     }
     break;
     default:
@@ -7688,6 +7689,7 @@ void CreateSketcherCommandsCreateGeo(void)
     rcCmdMgr.addCommand(new CmdSketcherCreateHexagon());
     rcCmdMgr.addCommand(new CmdSketcherCreateHeptagon());
     rcCmdMgr.addCommand(new CmdSketcherCreateOctagon());
+    rcCmdMgr.addCommand(new CmdSketcherCreateRegularPolygon());
     rcCmdMgr.addCommand(new CmdSketcherCreateSlot());
     rcCmdMgr.addCommand(new CmdSketcherCreateFillet());
     //rcCmdMgr.addCommand(new CmdSketcherCreateText());

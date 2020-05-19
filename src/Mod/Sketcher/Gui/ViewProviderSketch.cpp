@@ -169,7 +169,6 @@ SbVec2s ViewProviderSketch::newCursorPos;
 struct EditData {
     EditData():
     sketchHandler(0),
-    editDatumDialog(false),
     buttonPress(false),
     DragPoint(-1),
     DragCurve(-1),
@@ -202,8 +201,8 @@ struct EditData {
 
     // pointer to the active handler for new sketch objects
     DrawSketchHandler *sketchHandler;
-    bool editDatumDialog;
     bool buttonPress;
+    bool handleEscapeButton;
 
     // dragged point
     int DragPoint;
@@ -401,6 +400,7 @@ void ViewProviderSketch::deactivateHandler()
         std::vector<Base::Vector2d> editCurve;
         editCurve.clear();
         drawEdit(editCurve); // erase any line
+        resetPositionText();
         edit->sketchHandler->deactivated(this);
         edit->sketchHandler->unsetCursor();
         delete(edit->sketchHandler);
@@ -447,10 +447,6 @@ bool ViewProviderSketch::keyPressed(bool pressed, int key)
                     edit->sketchHandler->quit();
                 return true;
             }
-            if (edit && edit->editDatumDialog) {
-                edit->editDatumDialog = false;
-                return true;
-            }
             if (edit && (edit->DragConstraintSet.empty() == false)) {
                 if (!pressed) {
                     edit->DragConstraintSet.clear();
@@ -485,6 +481,10 @@ bool ViewProviderSketch::keyPressed(bool pressed, int key)
                 if (!pressed && !edit->buttonPress)
                     return true;
                 edit->buttonPress = pressed;
+
+                // More control over Sketcher edit mode Esc key behavior
+                // https://forum.freecadweb.org/viewtopic.php?f=3&t=42207
+                return edit->handleEscapeButton;
             }
             return false;
         }
@@ -1016,15 +1016,9 @@ void ViewProviderSketch::editDoubleClicked(void)
 
             // if its the right constraint
             if (Constr->isDimensional()) {
-
-                if(!Constr->isDriving) {
-                    Gui::cmdAppObjectArgs(getObject(), "setDriving(%i,%s)", id, "True");
-                }
-
-                // Coin's SoIdleSensor causes problems on some platform while Qt seems to work properly (#0001517)
-                EditDatumDialog *editDatumDialog = new EditDatumDialog(this, id);
-                QCoreApplication::postEvent(editDatumDialog, new QEvent(QEvent::User));
-                edit->editDatumDialog = true; // avoid to double handle "ESC"
+                Gui::Command::openCommand("Modify sketch constraints");
+                EditDatumDialog editDatumDialog(this, id);
+                editDatumDialog.exec();
             }
         }
     }
@@ -1479,7 +1473,7 @@ void ViewProviderSketch::onSelectionChanged(const Gui::SelectionChanges& msg)
     // are we in edit?
     if (edit) {
         // ignore external object
-        if(msg.ObjName.size() && msg.DocName.size() && msg.DocName!=getObject()->getDocument()->getName())
+        if(msg.Object.getObjectName().size() && msg.Object.getDocument()!=getObject()->getDocument())
             return;
 
         bool handled=false;
@@ -5650,6 +5644,9 @@ bool ViewProviderSketch::setEdit(int ModNum)
     ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/View");
     edit->MarkerSize = hGrp->GetInt("MarkerSize", 7);
 
+    ParameterGrp::handle hSketch = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
+    edit->handleEscapeButton = !hSketch->GetBool("LeaveSketchWithEscape", true);
+
     createEditInventorNodes();
 
     auto editDoc = Gui::Application::Instance->editDocument();
@@ -5847,14 +5844,14 @@ void ViewProviderSketch::UpdateSolverInformation()
     else if (dofs < 0) { // over-constrained sketch
         std::string msg;
         SketchObject::appendConflictMsg(getSketchObject()->getLastConflicting(), msg);
-        signalSetUp(QString::fromLatin1("<font color='red'>%1<a href=\"#conflicting\"><span style=\" text-decoration: underline; color:#0000ff;\">%2</span></a><br/>%3</font><br/>")
+        signalSetUp(QString::fromLatin1("<font color='red'>%1<a href=\"#conflicting\"><span style=\" text-decoration: underline; color:#0000ff; background-color: #F8F8FF;\">%2</span></a><br/>%3</font><br/>")
                     .arg(tr("Over-constrained sketch "))
                     .arg(tr("(click to select)"))
                     .arg(QString::fromStdString(msg)));
         signalSolved(QString());
     }
     else if (hasConflicts) { // conflicting constraints
-        signalSetUp(QString::fromLatin1("<font color='red'>%1<a href=\"#conflicting\"><span style=\" text-decoration: underline; color:#0000ff;\">%2</span></a><br/>%3</font><br/>")
+        signalSetUp(QString::fromLatin1("<font color='red'>%1<a href=\"#conflicting\"><span style=\" text-decoration: underline; color:#0000ff; background-color: #F8F8FF;\">%2</span></a><br/>%3</font><br/>")
                     .arg(tr("Sketch contains conflicting constraints "))
                     .arg(tr("(click to select)"))
                     .arg(appendConflictMsg(getSketchObject()->getLastConflicting())));
@@ -5862,7 +5859,7 @@ void ViewProviderSketch::UpdateSolverInformation()
     }
     else {
         if (hasRedundancies) { // redundant constraints
-            signalSetUp(QString::fromLatin1("<font color='orangered'>%1<a href=\"#redundant\"><span style=\" text-decoration: underline; color:#0000ff;\">%2</span></a><br/>%3</font><br/>")
+            signalSetUp(QString::fromLatin1("<font color='orangered'>%1<a href=\"#redundant\"><span style=\" text-decoration: underline; color:#0000ff; background-color: #F8F8FF;\">%2</span></a><br/>%3</font><br/>")
                         .arg(tr("Sketch contains redundant constraints "))
                         .arg(tr("(click to select)"))
                         .arg(appendRedundantMsg(getSketchObject()->getLastRedundant())));
@@ -5879,9 +5876,9 @@ void ViewProviderSketch::UpdateSolverInformation()
             }
             else if (!hasRedundancies) {
                 if (dofs == 1)
-                    signalSetUp(tr("Under-constrained sketch with <a href=\"#dofs\"><span style=\" text-decoration: underline; color:#0000ff;\">1 degree</span></a> of freedom"));
+                    signalSetUp(tr("Under-constrained sketch with <a href=\"#dofs\"><span style=\" text-decoration: underline; color:#0000ff; background-color: #F8F8FF;\">1 degree</span></a> of freedom"));
                 else
-                    signalSetUp(tr("Under-constrained sketch with <a href=\"#dofs\"><span style=\" text-decoration: underline; color:#0000ff;\">%1 degrees</span></a> of freedom").arg(dofs));
+                    signalSetUp(tr("Under-constrained sketch with <a href=\"#dofs\"><span style=\" text-decoration: underline; color:#0000ff; background-color: #F8F8FF;\">%1 degrees</span></a> of freedom").arg(dofs));
             }
 
             signalSolved(QString::fromLatin1("<font color='green'>%1</font>").arg(tr("Solved in %1 sec").arg(getSketchObject()->getLastSolveTime())));

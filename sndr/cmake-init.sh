@@ -14,7 +14,7 @@ cmake \
 -DFREECAD_USE_OCC_VARIANT=Official_Version \
 -DMpidotH=/usr/include/mpi.h \
 -DMEDFILE_INCLUDE_DIRS=/usr/include/med \
--DFREECAD_USE_QTWEBMODULE="Qt WebEngine" \
+-DFREECAD_USE_QTWEBMODULE="Qt WebKit" \
 -DPYTHON_EXECUTABLE=${PY_EXE} \
 -DPYTHON_LIBRARIES=${PY_LIB} \
 -DPYTHON_LIBPATH=${PY_LIB_PATH} \
@@ -23,3 +23,5 @@ ${ROOT_DIR}
 
 #cmake --build . -j 2 -t install
 popd
+
+#-DFREECAD_USE_QTWEBMODULE="Qt WebEngine" \

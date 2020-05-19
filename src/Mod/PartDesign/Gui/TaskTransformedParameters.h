@@ -143,6 +143,11 @@ public:
     virtual void apply() = 0;
 
     void setupTransaction();
+
+    int getTransactionID() const {
+        return transactionID;
+    }
+
 protected Q_SLOTS:
     /**
      * Returns the base transformation view provider
@@ -190,6 +195,8 @@ protected:
     void checkVisibility();
 
 protected:
+    virtual void addObject(App::DocumentObject*);
+    virtual void removeObject(App::DocumentObject*);
     /** Notifies when the object is about to be removed. */
     virtual void slotDeletedObject(const Gui::ViewProviderDocumentObject& Obj);
     virtual void changeEvent(QEvent *e) = 0;
@@ -203,6 +210,7 @@ protected:
 protected:
     QWidget* proxy;
     ViewProviderTransformed *TransformedView;
+    int transactionID = 0;
 
     enum selectionModes { none, addFeature, removeFeature, reference };
     selectionModes selectionMode;

@@ -34,7 +34,9 @@
         <file>icons/TechDraw_Dimension_Link.svg</file>
         <file>icons/TechDraw_HorizontalExtentDimension.svg</file>
         <file>icons/TechDraw_VerticalExtentDimension.svg</file>
+        <file>icons/techdraw-landmarkdistance.svg</file>
         <file>icons/preferences-techdraw.svg</file>
+        <file>icons/arrownone.svg</file>
         <file>icons/arrowdot.svg</file>
         <file>icons/arrowopendot.svg</file>
         <file>icons/arrowfilled.svg</file>
@@ -65,11 +67,11 @@
         <file>icons/actions/techdraw-SpreadsheetView.svg</file>
         <file>icons/actions/techdraw-image.svg</file>
         <file>icons/actions/techdraw-DetailView.svg</file>
-        <file>icons/actions/techdraw-mline.svg</file>
+        <file>icons/actions/techdraw-LeaderLine.svg</file>
         <file>icons/actions/techdraw-RichTextAnnotation.svg</file>
-        <file>icons/actions/techdraw-point.svg</file>
-        <file>icons/actions/techdraw-midpoint.svg</file>
-        <file>icons/actions/techdraw-quadrant.svg</file>
+        <file>icons/actions/techdraw-CosmeticVertex.svg</file>
+        <file>icons/actions/techdraw-Midpoints.svg</file>
+        <file>icons/actions/techdraw-Quadrants.svg</file>
         <file>icons/actions/techdraw-facecenterline.svg</file>
         <file>icons/actions/techdraw-2linecenterline.svg</file>
         <file>icons/actions/techdraw-2pointcenterline.svg</file>
@@ -89,6 +91,11 @@
         <file>icons/arrow-down.svg</file>
         <file>icons/arrow-ccw.svg</file>
         <file>icons/arrow-cw.svg</file>
+        <file>icons/continuous-line.svg</file>
+        <file>icons/dot-line.svg</file>
+        <file>icons/dashDot-line.svg</file>
+        <file>icons/dashDotDot-line.svg</file>
+        <file>icons/dash-line.svg</file>
         <file>icons/techdraw-lock.png</file>
         <file>icons/cursor-balloon.png</file>
         <file>icons/none.svg</file>

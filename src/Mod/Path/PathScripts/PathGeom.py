@@ -23,13 +23,16 @@
 # ***************************************************************************
 
 import FreeCAD
-import Part
 import Path
 import PathScripts.PathLog as PathLog
 import math
 
 from FreeCAD import Vector
 from PySide import QtCore
+
+# lazily loaded modules
+from lazy_loader.lazy_loader import LazyLoader
+Part = LazyLoader('Part', globals(), 'Part')
 
 __title__ = "PathGeom - geometry utilities for Path"
 __author__ = "sliptonic (Brad Collette)"
@@ -313,6 +316,9 @@ def edgeForCmd(cmd, startPoint):
     """edgeForCmd(cmd, startPoint).
     Returns an Edge representing the given command, assuming a given startPoint."""
 
+    PathLog.debug("cmd: {}".format(cmd))
+    PathLog.debug("startpoint {}".format(startPoint))
+
     endPoint = commandEndPoint(cmd, startPoint)
     if (cmd.Name in CmdMoveStraight) or (cmd.Name in CmdMoveRapid):
         if pointsCoincide(startPoint, endPoint):
@@ -343,6 +349,10 @@ def edgeForCmd(cmd, startPoint):
         if isRoughly(startPoint.z, endPoint.z):
             midPoint = center + Vector(math.cos(angle), math.sin(angle), 0) * R
             PathLog.debug("arc: (%.2f, %.2f) -> (%.2f, %.2f) -> (%.2f, %.2f)" % (startPoint.x, startPoint.y, midPoint.x, midPoint.y, endPoint.x, endPoint.y))
+            PathLog.debug("StartPoint:{}".format(startPoint))
+            PathLog.debug("MidPoint:{}".format(midPoint))
+            PathLog.debug("EndPoint:{}".format(endPoint))
+
             return Part.Edge(Part.Arc(startPoint, midPoint, endPoint))
 
         # It's a Helix
@@ -433,22 +443,10 @@ def splitArcAt(edge, pt):
     """splitArcAt(edge, pt)
     Returns a list of 2 edges which together form the original arc split at the given point.
     The Vector pt has to represent a point on the given arc."""
-    p1 = edge.valueAt(edge.FirstParameter)
-    p2 = pt
-    p3 = edge.valueAt(edge.LastParameter)
-    edges = []
-
-    p = edge.Curve.parameter(p2)
-    #print("splitArcAt(%.2f, %.2f, %.2f): %.2f - %.2f - %.2f" % (pt.x, pt.y, pt.z, edge.FirstParameter, p, edge.LastParameter))
-
-    p12 = edge.Curve.value((edge.FirstParameter + p)/2)
-    p23 = edge.Curve.value((p + edge.LastParameter)/2)
-    #print("splitArcAt: p12=(%.2f, %.2f, %.2f) p23=(%.2f, %.2f, %.2f)" % (p12.x, p12.y, p12.z, p23.x, p23.y, p23.z))
-
-    edges.append(Part.Edge(Part.Arc(p1, p12, p2)))
-    edges.append(Part.Edge(Part.Arc(p2, p23, p3)))
-
-    return edges
+    p = edge.Curve.parameter(pt)
+    e0 = Part.Arc(edge.Curve.copy(), edge.FirstParameter, p).toShape()
+    e1 = Part.Arc(edge.Curve.copy(), p, edge.LastParameter).toShape()
+    return [e0, e1]
 
 def splitEdgeAt(edge, pt):
     """splitEdgeAt(edge, pt)

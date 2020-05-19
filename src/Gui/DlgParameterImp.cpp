@@ -63,11 +63,18 @@ DlgParameterImp::DlgParameterImp( QWidget* parent,  Qt::WindowFlags fl )
   , ui(new Ui_DlgParameter)
 {
     ui->setupUi(this);
-    QStringList groupLabels; 
+    ui->checkSort->setVisible(false); // for testing
+
+    QStringList groupLabels;
     groupLabels << tr( "Group" );
     paramGroup = new ParameterGroup(ui->splitter3);
     paramGroup->setHeaderLabels(groupLabels);
     paramGroup->setRootIsDecorated(false);
+#if QT_VERSION >= 0x050000
+    paramGroup->setSortingEnabled(true);
+    paramGroup->sortByColumn(0, Qt::AscendingOrder);
+    paramGroup->header()->setProperty("showSortIndicator", QVariant(true));
+#endif
 
     QStringList valueLabels; 
     valueLabels << tr( "Name" ) << tr( "Type" ) << tr( "Value" );
@@ -76,6 +83,9 @@ DlgParameterImp::DlgParameterImp( QWidget* parent,  Qt::WindowFlags fl )
     paramValue->setRootIsDecorated(false);
 #if QT_VERSION >= 0x050000
     paramValue->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    paramValue->setSortingEnabled(true);
+    paramValue->sortByColumn(0, Qt::AscendingOrder);
+    paramValue->header()->setProperty("showSortIndicator", QVariant(true));
 #else
     paramValue->header()->setResizeMode(0, QHeaderView::Stretch);
 #endif
@@ -107,6 +117,20 @@ DlgParameterImp::DlgParameterImp( QWidget* parent,  Qt::WindowFlags fl )
     connect(paramGroup, SIGNAL(currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)), 
             this, SLOT(onGroupSelected(QTreeWidgetItem*)));
     onGroupSelected(paramGroup->currentItem());
+
+    // setup for function on_findGroup_changed:
+    // store the current font properties because
+    // we don't know what style sheet the user uses for FC
+    defaultFont = paramGroup->font();
+    boldFont = defaultFont;
+    boldFont.setBold(true);
+    defaultColor = paramGroup->topLevelItem(0)->foreground(0);
+
+    // set a placeholder text to inform the user
+    // (QLineEdit has no placeholderText property in Qt4)
+#if QT_VERSION >= 0x050200
+    ui->findGroupLE->setPlaceholderText(tr("Search Group"));
+#endif
 }
 
 /** 
@@ -125,6 +149,76 @@ void DlgParameterImp::on_buttonFind_clicked()
     finder->show();
 }
 
+void DlgParameterImp::on_findGroupLE_textChanged(const QString &SearchStr)
+{
+    // search for group tree items and highlight found results
+
+    QTreeWidgetItem* ExpandItem;
+
+    // at first reset all items to the default font and expand state
+    if (foundList.size() > 0) {
+        for (QTreeWidgetItem* item : foundList) {
+            item->setFont(0, defaultFont);
+            item->setForeground(0, defaultColor);
+            ExpandItem = item;
+            // a group can be nested down to several levels
+            // do not collapse if the search string is empty
+            while (!SearchStr.isEmpty()) {
+                if (!ExpandItem->parent())
+                    break;
+                else {
+                    ExpandItem->setExpanded(false);
+                    ExpandItem = ExpandItem->parent();
+                }
+            }
+        }
+    }
+    // expand the top level entries to get the initial tree state
+    for (int i = 0; i < paramGroup->topLevelItemCount(); ++i) {
+        paramGroup->topLevelItem(i)->setExpanded(true);
+    }
+
+    // don't perform a search if the string is empty
+    if (SearchStr.isEmpty())
+        return;
+
+    // search the tree widget
+    foundList = paramGroup->findItems(SearchStr, Qt::MatchContains | Qt::MatchRecursive);
+    if (foundList.size() > 0) {
+        // reset background style sheet
+        if (!ui->findGroupLE->styleSheet().isEmpty())
+            ui->findGroupLE->setStyleSheet(QString());
+        for (QTreeWidgetItem* item : foundList) {
+            item->setFont(0, boldFont);
+            item->setForeground(0, Qt::red);
+            // expand its parent to see the item
+            // a group can be nested down to several levels
+            ExpandItem = item;
+            while (true) {
+                if (!ExpandItem->parent())
+                    break;
+                else {
+                    ExpandItem->setExpanded(true);
+                    ExpandItem = ExpandItem->parent();
+                }
+            }
+            // if there is only one item found, scroll to it
+            if (foundList.size() == 1) {
+                paramGroup->scrollToItem(foundList[0], QAbstractItemView::PositionAtCenter);
+            }
+        }
+    }
+    else {
+        // Set red background to indicate no matching
+        QString styleSheet = QString::fromLatin1(
+            " QLineEdit {\n"
+            "     background-color: rgb(221,144,161);\n"
+            " }\n"
+        );
+        ui->findGroupLE->setStyleSheet(styleSheet);
+    }
+}
+
 /**
  *  Sets the strings of the subwidgets using the current
  *  language.
@@ -140,6 +234,21 @@ void DlgParameterImp::changeEvent(QEvent *e)
     } else {
         QDialog::changeEvent(e);
     }
+}
+
+void DlgParameterImp::on_checkSort_toggled(bool on)
+{
+#if QT_VERSION >= 0x050000
+    paramGroup->setSortingEnabled(on);
+    paramGroup->sortByColumn(0, Qt::AscendingOrder);
+    paramGroup->header()->setProperty("showSortIndicator", QVariant(on));
+#endif
+
+#if QT_VERSION >= 0x050000
+    paramValue->setSortingEnabled(on);
+    paramValue->sortByColumn(0, Qt::AscendingOrder);
+    paramValue->header()->setProperty("showSortIndicator", QVariant(on));
+#endif
 }
 
 void DlgParameterImp::on_closeButton_clicked()
@@ -207,6 +316,7 @@ void DlgParameterImp::onGroupSelected( QTreeWidgetItem * item )
 {
     if ( item && item->type() == QTreeWidgetItem::UserType + 1 )
     {
+        bool sortingEnabled = paramValue->isSortingEnabled();
         paramValue->clear();
         Base::Reference<ParameterGrp> _hcGrp = static_cast<ParameterGroupItem*>(item)->_hcGrp;
         static_cast<ParameterValue*>(paramValue)->setCurrentGroup( _hcGrp );
@@ -246,6 +356,7 @@ void DlgParameterImp::onGroupSelected( QTreeWidgetItem * item )
         {
             (void)new ParameterUInt(paramValue,QString::fromUtf8(It6->first.c_str()),It6->second, _hcGrp);
         }
+        paramValue->setSortingEnabled(sortingEnabled);
     }
 }
 
@@ -609,6 +720,20 @@ void ParameterValue::keyPressEvent (QKeyEvent* event)
   }
 }
 
+void ParameterValue::resizeEvent(QResizeEvent* event)
+{
+#if QT_VERSION >= 0x050000
+    QHeaderView* hv = header();
+    hv->setSectionResizeMode(QHeaderView::Stretch);
+#endif
+
+    QTreeWidget::resizeEvent(event);
+
+#if QT_VERSION >= 0x050000
+    hv->setSectionResizeMode(QHeaderView::Interactive);
+#endif
+}
+
 void ParameterValue::onChangeSelectedItem(QTreeWidgetItem* item, int col)
 {
     if (isItemSelected(item) && col > 0)
@@ -859,10 +984,8 @@ void ParameterGroupItem::setData ( int column, int role, const QVariant & value 
         else 
         {
             // rename the group by adding a new group, copy the content and remove the old group
-            Base::Reference<ParameterGrp> hOldGrp = item->_hcGrp->GetGroup( oldName.toLatin1() );
-            Base::Reference<ParameterGrp> hNewGrp = item->_hcGrp->GetGroup( newName.toLatin1() );
-            hOldGrp->copyTo( hNewGrp );
-            item->_hcGrp->RemoveGrp( oldName.toLatin1() );
+            if (!item->_hcGrp->RenameGrp(oldName.toLatin1(), newName.toLatin1()))
+                return;
         }
     }
 

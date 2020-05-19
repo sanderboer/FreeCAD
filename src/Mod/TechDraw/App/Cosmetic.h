@@ -77,6 +77,9 @@ public:
     CosmeticVertex(Base::Vector3d loc);
     virtual ~CosmeticVertex() = default;
 
+    void move(Base::Vector3d newPos);
+    void moveRelative(Base::Vector3d movement);
+
     std::string toString(void) const;
     void dump(const char* title);
     Base::Vector3d scaled(double factor);
@@ -109,6 +112,9 @@ protected:
     void assignTag(const TechDraw::CosmeticVertex* cv);
 
     boost::uuids::uuid tag;
+
+    Py::Object PythonObject;
+
 
 };
 
@@ -144,7 +150,7 @@ public:
     Base::Vector3d permaStart;         //persistent unscaled start/end points in View coords?
     Base::Vector3d permaEnd; 
     double permaRadius;
-    void unscaleEnds(double scale);
+//    void unscaleEnds(double scale);
     TechDraw::BaseGeom* m_geometry;
     LineFormat m_format;
 
@@ -155,8 +161,10 @@ protected:
     //Uniqueness
     void createNewTag();
     void assignTag(const TechDraw::CosmeticEdge* ce);
-
     boost::uuids::uuid tag;
+
+    Py::Object PythonObject;
+
 };
 
 //***** CenterLine *************************************************************
@@ -266,6 +274,8 @@ protected:
 
     boost::uuids::uuid tag;
 
+    Py::Object PythonObject;
+
 };
 
 //********** GeomFormat ********************************************************
@@ -307,6 +317,7 @@ protected:
     void assignTag(const TechDraw::GeomFormat* gf);
 
     boost::uuids::uuid tag;
+    Py::Object PythonObject;
 };
 
 } //end namespace TechDraw

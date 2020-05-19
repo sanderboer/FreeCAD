@@ -236,6 +236,45 @@ def getGuiData(filename):
 
 
 
+def saveDiffuseColor(colorlist):
+
+    """saveDiffuseColor(colorlist): Saves the given list or tuple of
+    color tuples to a temp file, suitable to include in a DiffuseColor
+    property. Returns the path to the created temp file"""
+
+    def tochr(i):
+        #print("tochr:",i)
+        if sys.version_info.major < 3:
+            return chr(i)
+        else:
+            return bytes((i,))
+    # if too many colors, bail out and use only the first one for now...
+    if len(colorlist) > 254: 
+        colorlist = colorlist[:1]
+        print("debug: too many colors, reducing")
+    output = tochr(len(colorlist))+3*tochr(0)
+    allfloats = True
+    for color in colorlist:
+        for d in color:
+            if d > 1:
+                allfloats = False
+                break
+    for color in colorlist:
+        if len(color) < 4:
+            output += tochr(0)
+        for d in reversed(color):
+            if allfloats:
+                output += tochr(int(d*255))
+            else:
+                output += tochr(int(d))
+    colfile = tempfile.mkstemp(prefix="DiffuseColor")[-1]
+    f = open(colfile,"wb")
+    f.write(output)
+    f.close()
+    return colfile
+
+
+
 def getColors(filename,nodiffuse=False):
 
     """getColors(filename,nodiffuse): Extracts the colors saved in a FreeCAD file
@@ -287,6 +326,7 @@ def getStepData(objects,colors):
             # no color information. This object will be exported without colors
             data.append(obj)
     return data
+
 
 
 def render(outputfile,scene=None,camera=None,zoom=False,width=400,height=300,background=(1.0,1.0,1.0),lightdir=None):
@@ -561,10 +601,13 @@ def save(document,filename=None,guidata=None,colors=None,camera=None):
         guidoc = buildGuiDocumentFromColors(document,colors,camera)
         if guidoc:
             zf = zipfile.ZipFile(filename, mode='a')
-            zf.write(guidoc,'GuiDocument.xml')
+            zf.write(guidoc[0],'GuiDocument.xml')
+            for colorfile in guidoc[1:]:
+                zf.write(colorfile,os.path.basename(colorfile))
             zf.close()
-            # delete the temp file
-            os.remove(guidoc)
+            # delete the temp files
+            for tfile in guidoc:
+                os.remove(tfile)
 
 
 
@@ -599,6 +642,8 @@ def buildGuiDocumentFromColors(document,colors,camera=None):
     guidoc += "-->\n"
     guidoc += "<Document SchemaVersion=\"1\">\n"
 
+    colfiles = []
+
     vps = [obj for obj in document.Objects if obj.Name in colors]
     if not vps:
         return None
@@ -608,12 +653,12 @@ def buildGuiDocumentFromColors(document,colors,camera=None):
         guidoc += "            <Properties Count=\"2\">\n"
         vpcol = colors[vp.Name]
         if isinstance(vpcol[0],tuple):
-            # Diffuse colors not yet supported (need to create extra files...) for now simply use the first color...
-            #guidoc += "                <Property name=\"DiffuseColor\" type=\"App::PropertyColorList\">\n"
-            #guidoc += "                    <ColorList file=\"DiffuseColor\"/>\n"
-            #guidoc += "                </Property>\n"
-            guidoc += "                <Property name=\"ShapeColor\" type=\"App::PropertyColor\">\n"
-            guidoc += "                    <PropertyColor value=\""+getUnsigned(vpcol[0])+"\"/>\n"
+            # distinct diffuse colors
+            colfile = saveDiffuseColor(vpcol)
+            name = os.path.basename(colfile)
+            colfiles.append(colfile)
+            guidoc += "                <Property name=\"DiffuseColor\" type=\"App::PropertyColorList\">\n"
+            guidoc += "                    <ColorList file=\""+name+"\"/>\n"
             guidoc += "                </Property>\n"
         else:
             guidoc += "                <Property name=\"ShapeColor\" type=\"App::PropertyColor\">\n"
@@ -647,7 +692,7 @@ def buildGuiDocumentFromColors(document,colors,camera=None):
     f.write(guidoc)
     f.close()
 
-    return tempxml
+    return [tempxml]+colfiles
 
 
 
@@ -704,12 +749,36 @@ def buildGuiDocumentFromGuiData(document,guidata):
                         guidoc += "                        <Enum value=\""+v+"\"/>\n"
                     guidoc += "                    </CustomEnumList>\n"
             elif prop["type"] in ["App::PropertyColorList"]:
-                # number of colors
-                buf = binascii.unhexlify(hex(len(prop["value"]))[2:].zfill(2))
-                # fill 3 other bytes (the number of colors occupies 4 bytes)
-                buf += binascii.unhexlify(hex(0)[2:].zfill(2))
-                buf += binascii.unhexlify(hex(0)[2:].zfill(2))
-                buf += binascii.unhexlify(hex(0)[2:].zfill(2))
+                # DiffuseColor: first 4 bytes of file tells number of Colors
+                # then rest of bytes represent colors value where each color
+                # is of 4 bytes in abgr order.
+
+                # convert number of colors into hexadecimal representation
+                hex_repr = hex(len(prop["value"]))[2:]
+
+                # if len of `hex_repr` is odd, then add 0 padding.
+                # `hex_repr` must contain an even number of hex digits
+                # as `binascii.unhexlify` only works of even hex str.
+                if len(hex_repr) % 2 != 0:
+                    hex_repr = "0" + hex_repr
+                buf = binascii.unhexlify(hex_repr)
+
+                if len(hex_repr) > 8:
+                    raise NotImplementedError(
+                        "Number of colors ({}) is greater than 4 bytes and in DiffuseColor file we only "
+                        "specify number of colors in 4 bytes.".format(len(prop["value"]))
+                    )
+                elif len(hex_repr) == 2:  # `hex_repr` == 1 byte
+                    # fill 3 other bytes (the number of colors occupies 4 bytes)
+                    buf += binascii.unhexlify(hex(0)[2:].zfill(2))
+                    buf += binascii.unhexlify(hex(0)[2:].zfill(2))
+                    buf += binascii.unhexlify(hex(0)[2:].zfill(2))
+                elif len(hex_repr) == 4:  # `hex_repr` == 2 bytes
+                    buf += binascii.unhexlify(hex(0)[2:].zfill(2))
+                    buf += binascii.unhexlify(hex(0)[2:].zfill(2))
+                elif len(hex_repr) == 6:  # `hex_repr` == 3 bytes
+                    buf += binascii.unhexlify(hex(0)[2:].zfill(2))
+
                 # fill colors in abgr order
                 for color in prop["value"]:
                     if len(color) >= 4:

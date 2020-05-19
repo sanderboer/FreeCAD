@@ -369,33 +369,33 @@ bool StdCmdMergeProjects::isActive(void)
 }
 
 //===========================================================================
-// Std_ExportGraphviz
+// Std_DependencyGraph
 //===========================================================================
 
-DEF_STD_CMD_A(StdCmdExportGraphviz)
+DEF_STD_CMD_A(StdCmdDependencyGraph)
 
-StdCmdExportGraphviz::StdCmdExportGraphviz()
-  : Command("Std_ExportGraphviz")
+StdCmdDependencyGraph::StdCmdDependencyGraph()
+  : Command("Std_DependencyGraph")
 {
     // setting the
     sGroup        = QT_TR_NOOP("Tools");
     sMenuText     = QT_TR_NOOP("Dependency graph...");
     sToolTipText  = QT_TR_NOOP("Show the dependency graph of the objects in the active document");
     sStatusTip    = QT_TR_NOOP("Show the dependency graph of the objects in the active document");
-    sWhatsThis    = "Std_ExportGraphviz";
+    sWhatsThis    = "Std_DependencyGraph";
     eType         = 0;
 }
 
-void StdCmdExportGraphviz::activated(int iMsg)
+void StdCmdDependencyGraph::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     App::Document* doc = App::GetApplication().getActiveDocument();
     Gui::GraphvizView* view = new Gui::GraphvizView(*doc);
-    view->setWindowTitle(qApp->translate("Std_ExportGraphviz","Dependency graph"));
+    view->setWindowTitle(qApp->translate("Std_DependencyGraph","Dependency graph"));
     getMainWindow()->addWindow(view);
 }
 
-bool StdCmdExportGraphviz::isActive(void)
+bool StdCmdDependencyGraph::isActive(void)
 {
     return (getActiveGuiDocument() ? true : false);
 }
@@ -1130,6 +1130,9 @@ void StdCmdDelete::activated(int iMsg)
             commitCommand();
             return;
         }
+
+        App::TransactionLocker tlock;
+
         Gui::getMainWindow()->setUpdatesEnabled(false);
         auto editDoc = Application::Instance->editDocument();
         ViewProviderDocumentObject *vpedit = 0;
@@ -1288,13 +1291,22 @@ StdCmdRefresh::StdCmdRefresh()
     sAccel        = keySequenceToAccel(QKeySequence::Refresh);
     eType         = AlterDoc | Alter3DView | AlterSelection | ForEdit;
     bCanLog        = false;
+
+    // Make it optional to create a transaction for a recompute.
+    // The new default behaviour is quite cumbersome in some cases because when
+    // undoing the last transaction the manual recompute will clear the redo stack.
+    ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath(
+            "User parameter:BaseApp/Preferences/Document");
+    bool create = hGrp->GetBool("TransactionOnRecompute", true);
+    if (!create)
+        eType = eType | NoTransaction;
 }
 
 void StdCmdRefresh::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     if (getActiveGuiDocument()) {
-        App::AutoTransaction trans("Recompute");
+        App::AutoTransaction trans((eType & NoTransaction) ? nullptr : "Recompute");
         try {
             doCommand(Doc,"App.activeDocument().recompute(None,True,True)");
         }
@@ -1491,7 +1503,7 @@ StdCmdEdit::StdCmdEdit()
     sToolTipText  = QT_TR_NOOP("Toggles the selected object's edit mode");
     sWhatsThis    = "Std_Edit";
     sStatusTip    = QT_TR_NOOP("Activates or Deactivates the selected object's edit mode");
-    sAccel        = "Shift+E";
+    sAccel        = "";
 #if QT_VERSION >= 0x040200
     sPixmap       = "edit-edit";
 #endif
@@ -1746,7 +1758,7 @@ void CreateDocCommands(void)
     rcCmdMgr.addCommand(new StdCmdImport());
     rcCmdMgr.addCommand(new StdCmdExport());
     rcCmdMgr.addCommand(new StdCmdMergeProjects());
-    rcCmdMgr.addCommand(new StdCmdExportGraphviz());
+    rcCmdMgr.addCommand(new StdCmdDependencyGraph());
 
     rcCmdMgr.addCommand(new StdCmdSave());
     rcCmdMgr.addCommand(new StdCmdSaveAs());

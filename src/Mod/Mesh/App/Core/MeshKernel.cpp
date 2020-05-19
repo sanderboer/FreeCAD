@@ -745,11 +745,36 @@ std::vector<unsigned long> MeshKernel::GetFacetPoints(const std::vector<unsigned
         points.push_back(p0);
         points.push_back(p1);
         points.push_back(p2);
-  }
+    }
 
     std::sort(points.begin(), points.end());
     points.erase(std::unique(points.begin(), points.end()), points.end());
     return points;
+}
+
+std::vector<unsigned long> MeshKernel::GetPointFacets(const std::vector<unsigned long>& points) const
+{
+    _aclPointArray.ResetFlag(MeshPoint::TMP0);
+    _aclFacetArray.ResetFlag(MeshFacet::TMP0);
+    for (std::vector<unsigned long>::const_iterator pI = points.begin(); pI != points.end(); ++pI)
+        _aclPointArray[*pI].SetFlag(MeshPoint::TMP0);
+
+    // mark facets if at least one corner point is marked
+    for (MeshFacetArray::_TConstIterator pF = _aclFacetArray.begin(); pF != _aclFacetArray.end(); ++pF) {
+        const MeshPoint &rclP0 = _aclPointArray[pF->_aulPoints[0]];
+        const MeshPoint &rclP1 = _aclPointArray[pF->_aulPoints[1]];
+        const MeshPoint &rclP2 = _aclPointArray[pF->_aulPoints[2]];
+
+        if (rclP0.IsFlag(MeshPoint::TMP0) ||
+            rclP1.IsFlag(MeshPoint::TMP0) ||
+            rclP2.IsFlag(MeshPoint::TMP0)) {
+            pF->SetFlag(MeshFacet::TMP0);
+        }
+    }
+
+    std::vector<unsigned long> facets;
+    MeshAlgorithm(*this).GetFacetsFlag(facets, MeshFacet::TMP0);
+    return facets;
 }
 
 std::vector<unsigned long> MeshKernel::HasFacets (const MeshPointIterator &rclIter) const
@@ -1049,6 +1074,26 @@ std::vector<Base::Vector3f> MeshKernel::CalcVertexNormals() const
         normals[p1] += Norm;
         normals[p2] += Norm;
         normals[p3] += Norm;
+    }
+
+    return normals;
+}
+
+std::vector<Base::Vector3f> MeshKernel::GetFacetNormals(const std::vector<unsigned long>& facets) const
+{
+    std::vector<Base::Vector3f> normals;
+    normals.reserve(facets.size());
+
+    for (std::vector<unsigned long>::const_iterator it = facets.begin(); it != facets.end(); ++it) {
+        const MeshFacet& face = _aclFacetArray[*it];
+
+        const Base::Vector3f& p1 = _aclPointArray[face._aulPoints[0]];
+        const Base::Vector3f& p2 = _aclPointArray[face._aulPoints[1]];
+        const Base::Vector3f& p3 = _aclPointArray[face._aulPoints[2]];
+
+        Base::Vector3f n = (p2 - p1) % (p3 - p1);
+        n.Normalize();
+        normals.emplace_back(n);
     }
 
     return normals;

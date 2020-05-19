@@ -1,7 +1,6 @@
 # ***************************************************************************
-# *   Copyright (c) 2018 - FreeCAD Developers                               *
-# *   Author: Przemo Firszt <przemo@firszt.eu>                              *
-# *   Author: Bernd Hahnebach <bernd@bimstatik.org>                         *
+# *   Copyright (c) 2018 Przemo Firszt <przemo@firszt.eu>                   *
+# *   Copyright (c) 2018 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
 # *   This file is part of the FreeCAD CAx development system.              *
 # *                                                                         *
@@ -21,7 +20,7 @@
 # *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
 # *   USA                                                                   *
 # *                                                                         *
-# ***************************************************************************/
+# ***************************************************************************
 
 
 # Unit test for the FEM module
@@ -60,21 +59,26 @@ False if FemTest10.__name__ else True
 
 """
 # examples from within FreeCAD:
+
+# create all objects test
+import Test, femtest.app.test_object
+Test.runTestsFromClass(femtest.app.test_object.TestObjectCreate)
+
 # all FEM tests
 import Test, TestFem
 Test.runTestsFromModule(TestFem)
 
 # module
-import Test, femtest.testcommon
-Test.runTestsFromModule(femtest.testcommon)
+import Test, femtest.app.test_common
+Test.runTestsFromModule(femtest.app.test_common)
 
 # class
-import Test, femtest.testcommon
-Test.runTestsFromClass(femtest.testcommon.TestFemCommon)
+import Test, femtest.app.test_common
+Test.runTestsFromClass(femtest.app.test_common.TestFemCommon)
 
 # method
 import unittest
-thetest = "femtest.testcommon.TestFemCommon.test_pyimport_all_FEM_modules"
+thetest = "femtest.app.test_common.TestFemCommon.test_pyimport_all_FEM_modules"
 alltest = unittest.TestLoader().loadTestsFromName(thetest)
 unittest.TextTestRunner().run(alltest)
 
@@ -89,8 +93,8 @@ unittest.TextTestRunner().run(alltest)
 ./bin/FreeCADCmd --run-test "TestFem"
 
 # import Fem and FemGui
-./bin/FreeCAD --run-test "femtest.testfemimport"
-./bin/FreeCADCmd --run-test "femtest.testfemimport"
+./bin/FreeCAD --run-test "femtest.app.test_femimport"
+./bin/FreeCADCmd --run-test "femtest.app.test_femimport"
 
 # other module
 ./bin/FreeCAD --run-test "femtest.app.test_femimport"
@@ -111,10 +115,10 @@ unittest.TextTestRunner().run(alltest)
 ./bin/FreeCADCmd --run-test "femtest.app.test_solverframework"
 
 # class
-./bin/FreeCAD --run-test "femtest.testcommon.TestFemCommon"
+./bin/FreeCAD --run-test "femtest.app.test_common.TestFemCommon"
 
 # method
-./bin/FreeCAD --run-test "femtest.testcommon.TestFemCommon.test_pyimport_all_FEM_modules"
+./bin/FreeCAD --run-test "femtest.app.test_common.TestFemCommon.test_pyimport_all_FEM_modules"
 
 # unit test command to run a specific FEM unit test to copy for fast tests :-)
 # to get all commands to start FreeCAD from build dir on Linux
@@ -125,9 +129,13 @@ gf()
 ./bin/FreeCADCmd --run-test "femtest.app.test_femimport.TestObjectExistance.test_objects_existance"
 ./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_freq_analysis"
 ./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_analysis"
-./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_contact_shell_shell"
+./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_force_faceload_hexa20"
+./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_contact_shell_shell"
+./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_contact_solid_solid"
+./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_tie"
 ./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_material_multiple"
 ./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_static_material_nonlinar"
+./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_thermomech_bimetall"
 ./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_thermomech_flow1D_analysis"
 ./bin/FreeCADCmd --run-test "femtest.app.test_ccxtools.TestCcxTools.test_thermomech_spine_analysis"
 ./bin/FreeCADCmd --run-test "femtest.app.test_common.TestFemCommon.test_adding_refshaps"
@@ -171,13 +179,25 @@ import unittest
 unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_analysis"))
 
 import unittest
-unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_contact_shell_shell"))
+unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_force_faceload_hexa20"))
+
+import unittest
+unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_contact_shell_shell"))
+
+import unittest
+unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_contact_solid_solid"))
+
+import unittest
+unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_constraint_tie"))
 
 import unittest
 unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_material_multiple"))
 
 import unittest
 unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_static_material_nonlinar"))
+
+import unittest
+unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_thermomech_bimetall"))
 
 import unittest
 unittest.TextTestRunner().run(unittest.TestLoader().loadTestsFromName("femtest.app.test_ccxtools.TestCcxTools.test_thermomech_flow1D_analysis"))

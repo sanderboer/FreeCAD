@@ -40,11 +40,15 @@
 #include <App/Material.h>
 
 #include <Mod/TechDraw/App/LineGroup.h>
+#include <Mod/TechDraw/App/LandmarkDimension.h>
+//#include <Mod/TechDraw/App/Preferences.h>
 
+#include "PreferencesGui.h"
 #include "QGIViewDimension.h"
 #include "ViewProviderDimension.h"
 
 using namespace TechDrawGui;
+using namespace TechDraw;
 
 const char *ViewProviderDimension::StandardAndStyleEnums[]=
     { "ISO Oriented", "ISO Referencing", "ASME Inlined", "ASME Referencing", NULL };
@@ -63,11 +67,13 @@ ViewProviderDimension::ViewProviderDimension()
 
     static const char *group = "Dim Format";
 
-    ADD_PROPERTY_TYPE(Font, (prefFont().c_str()), group, App::Prop_None, "The name of the font to use");
-    ADD_PROPERTY_TYPE(Fontsize, (prefFontSize()), group, (App::PropertyType)(App::Prop_None),
+    ADD_PROPERTY_TYPE(Font, (Preferences::labelFont().c_str()),
+                                              group, App::Prop_None, "The name of the font to use");
+    ADD_PROPERTY_TYPE(Fontsize, (Preferences::dimFontSizeMM()), 
+    								 group, (App::PropertyType)(App::Prop_None),
                                                                      "Dimension text size in units");
     ADD_PROPERTY_TYPE(LineWidth, (prefWeight()), group, (App::PropertyType)(App::Prop_None), 
-                                                        "Dimension line weight");
+                                                        "Dimension line width");
     ADD_PROPERTY_TYPE(Color,(prefColor()),group,App::Prop_None,"The color of the Dimension");
     ADD_PROPERTY_TYPE(StandardAndStyle, (prefStandardAndStyle()), group, App::Prop_None, 
                                         "Specifies the standard according to which this dimension is drawn");
@@ -88,6 +94,11 @@ void ViewProviderDimension::attach(App::DocumentObject *pcFeat)
 {
     // call parent attach method
     ViewProviderDrawingView::attach(pcFeat);
+
+    sPixmap = "TechDraw_Dimension";
+    if (getViewObject()->isDerivedFrom(TechDraw::LandmarkDimension::getClassTypeId())) {
+        sPixmap = "techdraw-landmarkdistance";
+    }
 }
 
 void ViewProviderDimension::setDisplayMode(const char* ModeName)
@@ -157,38 +168,22 @@ TechDraw::DrawViewDimension* ViewProviderDimension::getViewObject() const
 
 App::Color ViewProviderDimension::prefColor() const
 {
-    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
-                                        .GetGroup("BaseApp")->GetGroup("Preferences")->
-                                         GetGroup("Mod/TechDraw/Dimensions");
-    App::Color fcColor;
-    fcColor.setPackedValue(hGrp->GetUnsigned("Color", 0x00001100));
-    return fcColor;
+   return PreferencesGui::dimColor();
 }
 
 std::string ViewProviderDimension::prefFont() const
 {
-    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
-                                         .GetGroup("BaseApp")->GetGroup("Preferences")->
-                                         GetGroup("Mod/TechDraw/Labels");
-    std::string fontName = hGrp->GetASCII("LabelFont", "osifont");
-    return fontName;
+    return Preferences::labelFont();
 }
 
 double ViewProviderDimension::prefFontSize() const
 {
-    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
-                                         .GetGroup("BaseApp")->GetGroup("Preferences")->
-                                         GetGroup("Mod/TechDraw/Dimensions");
-    double fontSize = hGrp->GetFloat("FontSize", QGIView::DefaultFontSizeInMM);
-    return fontSize;
+    return Preferences::dimFontSizeMM();
 }
 
 double ViewProviderDimension::prefWeight() const
 {
-    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
-                                        .GetGroup("BaseApp")->GetGroup("Preferences")->
-                                        GetGroup("Mod/TechDraw/Decorations");
-    std::string lgName = hGrp->GetASCII("LineGroup","FC 0.70mm");
+    std::string lgName = Preferences::lineGroup();
     auto lg = TechDraw::LineGroup::lineGroupFactory(lgName);
     double weight = lg->getWeight("Thin");
     delete lg;                                   //Coverity CID 174670
@@ -202,4 +197,24 @@ int ViewProviderDimension::prefStandardAndStyle() const
                                          GetGroup("Mod/TechDraw/Dimensions");
     int standardStyle = hGrp->GetInt("StandardAndStyle", STD_STYLE_ISO_ORIENTED);
     return standardStyle;
+}
+
+void ViewProviderDimension::handleChangedPropertyType(Base::XMLReader &reader, const char *TypeName, App::Property *prop)
+// transforms properties that had been changed
+{
+    // property LineWidth had the App::PropertyFloat and was changed to App::PropertyLength
+    if (prop == &LineWidth && strcmp(TypeName, "App::PropertyFloat") == 0) {
+        App::PropertyFloat LineWidthProperty;
+        // restore the PropertyFloat to be able to set its value
+        LineWidthProperty.Restore(reader);
+        LineWidth.setValue(LineWidthProperty.getValue());
+    }
+}
+
+bool ViewProviderDimension::canDelete(App::DocumentObject *obj) const
+{
+    // deletions of dimension objects don't destroy anything
+    // thus we can pass this action
+    Q_UNUSED(obj)
+    return true;
 }

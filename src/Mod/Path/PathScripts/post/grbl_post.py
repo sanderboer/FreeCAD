@@ -3,6 +3,7 @@
 # *                                                                         *
 # *   (c) sliptonic (shopinthewoods@gmail.com) 2014                         *
 # *   (c) Gauthier Briere - 2018, 2019                                      *
+# *   (c) Schildkroet - 2019-2020                                           *
 # *                                                                         *
 # *   This file is part of the FreeCAD CAx development system.              *
 # *                                                                         *
@@ -30,6 +31,7 @@ import PathScripts.PostUtils as PostUtils
 import argparse
 import datetime
 import shlex
+import PathScripts.PathUtil as PathUtil
 
 
 TOOLTIP = '''
@@ -47,6 +49,7 @@ grbl_post.export(object, "/path/to/file.ncc")
 OUTPUT_COMMENTS = True            # default output of comments in output gCode file
 OUTPUT_HEADER = True              # default output header in output gCode file
 OUTPUT_LINE_NUMBERS = False       # default doesn't output line numbers in output gCode file
+OUTPUT_BCNC = False               # default doesn't add bCNC operation block headers in output gCode file
 SHOW_EDITOR = True                # default show the resulting file dialog output in GUI
 PRECISION = 3                     # Default precision for metric (see http://linuxcnc.org/docs/2.7/html/gcode/overview.html#_g_code_best_practices)
 TRANSLATE_DRILL_CYCLES = False    # If true, G81, G82 & G83 are translated in G0/G1 moves
@@ -97,6 +100,8 @@ parser.add_argument('--inches',             action='store_true', help='Convert o
 parser.add_argument('--tool-change',        action='store_true', help='Insert M6 for all tool changes')
 parser.add_argument('--wait-for-spindle',   type=int, default=0, help='Wait for spindle to reach desired speed after M3 / M4, default=0')
 parser.add_argument('--return-to',          default='',          help='Move to the specified coordinates at the end, e.g. --return-to=0,0')
+parser.add_argument('--bcnc',               action='store_true', help='Add Job operations as bCNC block headers. Consider suppressing existing comments: Add argument --no-comments')
+parser.add_argument('--no-bcnc',            action='store_true', help='suppress bCNC block header output (default)')
 TOOLTIP_ARGS = parser.format_help()
 
 
@@ -105,7 +110,7 @@ TOOLTIP_ARGS = parser.format_help()
 # ***************************************************************************
 MOTION_COMMANDS = ['G0', 'G00', 'G1', 'G01', 'G2', 'G02', 'G3', 'G03']  # Motion gCode commands definition
 RAPID_MOVES = ['G0', 'G00']                                             # Rapid moves gCode commands definition
-SUPPRESS_COMMANDS = ['G98', 'G80']                                      # These commands are ignored by commenting them out
+SUPPRESS_COMMANDS = []                                      # These commands are ignored by commenting them out
 COMMAND_SPACE = " "
 # Global variables storing current position
 CURRENT_X = 0
@@ -135,6 +140,7 @@ def processArguments(argstring):
   global OUTPUT_TOOL_CHANGE
   global SPINDLE_WAIT
   global RETURN_TO
+  global OUTPUT_BCNC
 
   try:
     args = parser.parse_args(shlex.split(argstring))
@@ -177,6 +183,10 @@ def processArguments(argstring):
       if len(RETURN_TO) != 2:
         RETURN_TO = None
         print("--return-to coordinates must be specified as <x>,<y>, ignoring")
+    if args.bcnc:
+      OUTPUT_BCNC = True
+    if args.no_bcnc:
+      OUTPUT_BCNC = False
 
 
   except Exception as e:
@@ -200,6 +210,7 @@ def export(objectslist, filename, argstring):
   global UNIT_FORMAT
   global UNIT_SPEED_FORMAT
   global MOTION_MODE
+  global SUPPRESS_COMMANDS
 
   print("Post Processor: " + __name__ + " postprocessing...")
   gcode = ""
@@ -209,6 +220,13 @@ def export(objectslist, filename, argstring):
     gcode += linenumber() + "(Exported by FreeCAD)\n"
     gcode += linenumber() + "(Post Processor: " + __name__ + ")\n"
     gcode += linenumber() + "(Output Time:" + str(datetime.datetime.now()) + ")\n"
+  
+  # Check canned cycles for drilling
+  if TRANSLATE_DRILL_CYCLES:
+    if len(SUPPRESS_COMMANDS) == 0:
+      SUPPRESS_COMMANDS = ['G98', 'G80']
+    else:
+      SUPPRESS_COMMANDS += ['G98', 'G80']
 
   # Write the preamble
   if OUTPUT_COMMENTS:
@@ -241,12 +259,37 @@ def export(objectslist, filename, argstring):
     if not hasattr(obj, "Path"):
       print("The object " + obj.Name + " is not a path. Please select only path and Compounds.")
       return
+    
+    # Skip inactive operations
+    if PathUtil.opProperty(obj, 'Active') is False:
+        continue
 
     # do the pre_op
+    if OUTPUT_BCNC:
+      gcode += linenumber() + "(Block-name: " + obj.Label + ")\n"
+      gcode += linenumber() + "(Block-expand: 0)\n"
+      gcode += linenumber() + "(Block-enable: 1)\n"
     if OUTPUT_COMMENTS:
       gcode += linenumber() + "(Begin operation: " + obj.Label + ")\n"
     for line in PRE_OPERATION.splitlines(True):
       gcode += linenumber() + line
+      
+    # get coolant mode
+    coolantMode = 'None'
+    if hasattr(obj, "CoolantMode") or hasattr(obj, 'Base') and  hasattr(obj.Base, "CoolantMode"):
+        if hasattr(obj, "CoolantMode"):
+            coolantMode = obj.CoolantMode
+        else:
+            coolantMode = obj.Base.CoolantMode
+
+    # turn coolant on if required
+    if OUTPUT_COMMENTS:
+        if not coolantMode == 'None':
+            gcode += linenumber() + '(Coolant On:' + coolantMode + ')\n'
+    if coolantMode == 'Flood':
+        gcode  += linenumber() + 'M8' + '\n'
+    if coolantMode == 'Mist':
+        gcode += linenumber() + 'M7' + '\n'
 
     # Parse the op
     gcode += parse(obj)
@@ -257,7 +300,17 @@ def export(objectslist, filename, argstring):
     for line in POST_OPERATION.splitlines(True):
       gcode += linenumber() + line
 
+    # turn coolant off if required
+    if not coolantMode == 'None':
+        if OUTPUT_COMMENTS:
+            gcode += linenumber() + '(Coolant Off:' + coolantMode + ')\n'
+        gcode += linenumber() +'M9' + '\n'
+
   # do the post_amble
+  if OUTPUT_BCNC:
+    gcode += linenumber() + "(Block-name: post_amble)\n"
+    gcode += linenumber() + "(Block-expand: 0)\n"
+    gcode += linenumber() + "(Block-enable: 1)\n"
   if OUTPUT_COMMENTS:
     gcode += linenumber() + "(Begin postamble)\n"
   for line in POSTAMBLE.splitlines(True):
@@ -364,7 +417,7 @@ def parse(pathobj):
       # store the latest command
       lastcommand = command
 
-      # Memorise la position courante pour calcul des mouvements relatis et du plan de retrait
+      # Memorizes the current position for calculating the related movements and the withdrawal plan
       if command in MOTION_COMMANDS:
         if 'X' in c.Parameters:
           CURRENT_X = Units.Quantity(c.Parameters['X'], FreeCAD.Units.Length)
@@ -382,7 +435,7 @@ def parse(pathobj):
       if TRANSLATE_DRILL_CYCLES:
         if command in ('G81', 'G82', 'G83'):
           out += drill_translate(outstring, command, c.Parameters)
-          # Efface la ligne que l'on vient de translater
+          # Erase the line we just translated
           del(outstring[:])
           outstring = []
 

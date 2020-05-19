@@ -326,12 +326,14 @@ PyObject* TopoShapeWirePy::makeHomogenousWires(PyObject *args)
     }
 }
 
-PyObject* TopoShapeWirePy::approximate(PyObject *args)
+PyObject* TopoShapeWirePy::approximate(PyObject *args, PyObject *kwds)
 {
     double tol2d = gp::Resolution();
     double tol3d = 0.0001;
     int maxseg=10, maxdeg=3;
-    if (!PyArg_ParseTuple(args, "ddii",&tol2d,&tol3d,&maxseg,&maxdeg))
+
+    static char* kwds_approx[] = {"Tol2d","Tol3d","MaxSegments","MaxDegree",NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|ddii", kwds_approx, &tol2d, &tol3d, &maxseg, &maxdeg))
         return 0;
     try {
         BRepAdaptor_CompCurve adapt(TopoDS::Wire(getTopoShapePtr()->getShape()));
@@ -524,6 +526,37 @@ PyObject* TopoShapeWirePy::discretize(PyObject *args, PyObject *kwds)
 
     PyErr_SetString(PartExceptionOCCError,"Wrong arguments");
     return 0;
+}
+
+Py::String TopoShapeWirePy::getContinuity() const
+{
+    BRepAdaptor_CompCurve adapt(TopoDS::Wire(getTopoShapePtr()->getShape()));
+    std::string cont;
+    switch (adapt.Continuity()) {
+    case GeomAbs_C0:
+        cont = "C0";
+        break;
+    case GeomAbs_G1:
+        cont = "G1";
+        break;
+    case GeomAbs_C1:
+        cont = "C1";
+        break;
+    case GeomAbs_G2:
+        cont = "G2";
+        break;
+    case GeomAbs_C2:
+        cont = "C2";
+        break;
+    case GeomAbs_C3:
+        cont = "C3";
+        break;
+    case GeomAbs_CN:
+        cont = "CN";
+        break;
+    }
+
+    return Py::String(cont);
 }
 
 Py::Object TopoShapeWirePy::getMass(void) const

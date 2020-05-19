@@ -328,6 +328,45 @@ bool CmdSketcherLeaveSketch::isActive(void)
     return false;
 }
 
+DEF_STD_CMD_A(CmdSketcherStopOperation)
+
+CmdSketcherStopOperation::CmdSketcherStopOperation()
+  : Command("Sketcher_StopOperation")
+{
+    sAppModule      = "Sketcher";
+    sGroup          = QT_TR_NOOP("Sketcher");
+    sMenuText       = QT_TR_NOOP("Stop operation");
+    sToolTipText    = QT_TR_NOOP("Stop current operation");
+    sWhatsThis      = "Sketcher_StopOperation";
+    sStatusTip      = sToolTipText;
+    sPixmap         = "process-stop";
+    eType           = 0;
+}
+
+void CmdSketcherStopOperation::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    Gui::Document *doc = getActiveGuiDocument();
+
+    if (doc) {
+        SketcherGui::ViewProviderSketch* vp = dynamic_cast<SketcherGui::ViewProviderSketch*>(doc->getInEdit());
+        if (vp) {
+            vp->purgeHandler();
+        }
+    }
+}
+
+bool CmdSketcherStopOperation::isActive(void)
+{
+    Gui::Document *doc = getActiveGuiDocument();
+    if (doc) {
+        SketcherGui::ViewProviderSketch* vp = dynamic_cast<SketcherGui::ViewProviderSketch*>(doc->getInEdit());
+        if (vp)
+            return true;
+    }
+    return false;
+}
+
 DEF_STD_CMD_A(CmdSketcherReorientSketch)
 
 CmdSketcherReorientSketch::CmdSketcherReorientSketch()
@@ -723,7 +762,7 @@ void CmdSketcherMirrorSketch::activated(int iMsg)
         std::vector<Part::Geometry *> tempgeo = tempsketch->getInternalGeometry();
         std::vector<Sketcher::Constraint *> tempconstr = tempsketch->Constraints.getValues();
 
-        // If value of addedGeometries or addedConstraints is -1, it gets added to vector begin iterator and that is invlid
+        // If value of addedGeometries or addedConstraints is -1, it gets added to vector begin iterator and that is invalid
         std::vector<Part::Geometry *> mirrorgeo(tempgeo.begin() + (addedGeometries + 1), tempgeo.end());
         std::vector<Sketcher::Constraint *> mirrorconstr(tempconstr.begin() + (addedConstraints + 1), tempconstr.end());
 
@@ -872,6 +911,7 @@ void CreateSketcherCommands(void)
     rcCmdMgr.addCommand(new CmdSketcherNewSketch());
     rcCmdMgr.addCommand(new CmdSketcherEditSketch());
     rcCmdMgr.addCommand(new CmdSketcherLeaveSketch());
+    rcCmdMgr.addCommand(new CmdSketcherStopOperation());
     rcCmdMgr.addCommand(new CmdSketcherReorientSketch());
     rcCmdMgr.addCommand(new CmdSketcherMapSketch());
     rcCmdMgr.addCommand(new CmdSketcherViewSketch());

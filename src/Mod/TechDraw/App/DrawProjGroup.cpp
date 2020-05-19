@@ -37,6 +37,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
+#include <App/Part.h>
 
 #include <Base/BoundBox.h>
 #include <Base/Console.h>
@@ -45,6 +46,7 @@
 #include <Base/Parameter.h>
 
 #include "DrawUtil.h"
+#include "Preferences.h"
 #include "DrawPage.h"
 #include "DrawProjGroupItem.h"
 #include "DrawProjGroup.h"
@@ -53,14 +55,15 @@
 
 using namespace TechDraw;
 
-const char* DrawProjGroup::ProjectionTypeEnums[] = {"Default",
-                                                    "First Angle",
+const char* DrawProjGroup::ProjectionTypeEnums[] = {"First Angle",
                                                     "Third Angle",
+                                                    "Default",          //Use Page setting
                                                     NULL};
 
 PROPERTY_SOURCE(TechDraw::DrawProjGroup, TechDraw::DrawViewCollection)
 
-DrawProjGroup::DrawProjGroup(void)
+DrawProjGroup::DrawProjGroup(void) :
+    m_lockScale(false)
 {
     static const char *group = "Base";
     static const char *agroup = "Distribute";
@@ -71,6 +74,9 @@ DrawProjGroup::DrawProjGroup(void)
     
     ADD_PROPERTY_TYPE(Source    ,(0), group, App::Prop_None,"Shape to view");
     Source.setScope(App::LinkScope::Global);
+    Source.setAllowExternal(true);
+    ADD_PROPERTY_TYPE(XSource ,(0),group,App::Prop_None,"External 3D Shape to view");
+
     ADD_PROPERTY_TYPE(Anchor, (0), group, App::Prop_None, "The root view to align projections with");
     Anchor.setScope(App::LinkScope::Global);
 
@@ -90,34 +96,40 @@ DrawProjGroup::~DrawProjGroup()
 {
 }
 
+
+//TODO: this duplicates code in DVP
+std::vector<App::DocumentObject*> DrawProjGroup::getAllSources(void) const
+{
+//    Base::Console().Message("DPG::getAllSources()\n");
+    const std::vector<App::DocumentObject*> links = Source.getValues();
+    std::vector<DocumentObject*> xLinks;
+    XSource.getLinks(xLinks);
+    std::vector<App::DocumentObject*> result = links;
+    if (!xLinks.empty()) {
+        result.insert(result.end(), xLinks.begin(), xLinks.end());
+    }
+    return result;
+}
+
+
 void DrawProjGroup::onChanged(const App::Property* prop)
 {
     //TODO: For some reason, when the projection type is changed, the isometric views show change appropriately, but the orthographic ones don't... Or vice-versa.  WF: why would you change from 1st to 3rd in mid drawing?
     //if group hasn't been added to page yet, can't scale or distribute projItems
     TechDraw::DrawPage *page = getPage();
     if (!isRestoring() && page) {
-        if (prop == &Source) {
-//            std::vector<App::DocumentObject*> sourceObjs = Source.getValues();
-//            if (!sourceObjs.empty()) {
-//                if (!hasAnchor()) {
-//                    // if we have a Source, but no Anchor, make an anchor
-//                    Anchor.setValue(addProjection("Front"));      //<<<<< semi-loop here!
-//                    //add projection marks object as changed -> onChanged, but anchor value isn't set
-//                    Anchor.purgeTouched();                      //don't need to mark this
-//                }
-//            } else {
-//                //Source has been changed to null! Why? What to do?
-//            }
-        }
         if (prop == &Scale) {
-            updateChildrenScale();
+            if (!m_lockScale) {
+                updateChildrenScale();
+            }
         }
 
         if (prop == &ProjectionType) {
             updateChildrenEnforce();
         }
 
-        if (prop == &Source) {
+        if ( (prop == &Source) ||
+             (prop == &XSource) ) {
             updateChildrenSource();
         }
 
@@ -128,11 +140,7 @@ void DrawProjGroup::onChanged(const App::Property* prop)
         if (prop == &ScaleType) {
             double newScale = getScale();
             if (ScaleType.isValue("Automatic")) {
-                //Recalculate scale if Group is too big or too small!
-                newScale = calculateAutomaticScale();
-                if(std::abs(getScale() - newScale) > FLT_EPSILON) {
-                    Scale.setValue(newScale);
-                }
+                //Nothing in particular
             } else if (ScaleType.isValue("Page")) {
                 newScale = page->Scale.getValue();
                 if(std::abs(getScale() - newScale) > FLT_EPSILON) {
@@ -165,7 +173,7 @@ App::DocumentObjectExecReturn *DrawProjGroup::execute(void)
         return DrawViewCollection::execute();
     }
 
-    std::vector<App::DocumentObject*> docObjs = Source.getValues();
+    std::vector<App::DocumentObject*> docObjs = getAllSources();
     if (docObjs.empty()) {
         return DrawViewCollection::execute();
     }
@@ -176,8 +184,18 @@ App::DocumentObjectExecReturn *DrawProjGroup::execute(void)
         return DrawViewCollection::execute();
     }
 
-    autoPositionChildren();
+    if (ScaleType.isValue("Automatic")) {
+        if (!checkFit()) {
+            double newScale = autoScale();
+            m_lockScale = true;
+            Scale.setValue(newScale);
+            Scale.purgeTouched();
+            updateChildrenScale();
+            m_lockScale = false;
+        }
+    }
 
+    autoPositionChildren();
     return DrawViewCollection::execute();
 }
 
@@ -187,6 +205,7 @@ short DrawProjGroup::mustExecute() const
     if (!isRestoring()) {
         result = Views.isTouched() ||
                  Source.isTouched() ||
+                 XSource.isTouched() ||
                  Scale.isTouched()  ||
                  ScaleType.isTouched() ||
                  ProjectionType.isTouched() ||
@@ -219,6 +238,7 @@ Base::BoundBox3d DrawProjGroup::getBoundingBox() const
 
             bb.ScaleX(1. / part->getScale());
             bb.ScaleY(1. / part->getScale());
+            bb.ScaleZ(1. / part->getScale());
 
             // X and Y of dependent views are relative to the anchorView
             if (part != anchorView) {
@@ -237,6 +257,7 @@ TechDraw::DrawPage * DrawProjGroup::getPage(void) const
     return findParentPage();
 }
 
+// obs? replaced by autoscale?
 // Function provided by Joe Dowsett, 2014
 double DrawProjGroup::calculateAutomaticScale() const
 {
@@ -248,14 +269,13 @@ double DrawProjGroup::calculateAutomaticScale() const
 
     arrangeViewPointers(viewPtrs);
     double width, height;
-    minimumBbViews(viewPtrs, width, height);                               //get 1:1 bbxs
-                                            // if Page.keepUpdated is false, and DrawViews have never been executed,
-                                            // bb's will be 0x0 and this routine will return 0!!!
-                                            // if we return 1.0, AutoScale will sort itself out once bb's are non-zero.
+    minimumBbViews(viewPtrs, width, height);   //get SCALED boxes!
+                                        // if Page.keepUpdated is false, and DrawViews have never been executed,
+                                        // bb's will be 0x0 and this routine will return 0!!!
+                                        // if we return 1.0, AutoScale will sort itself out once bb's are non-zero.
     double bbFudge = 1.2;
     width *= bbFudge;
     height *= bbFudge;
-
 
     // C++ Standard says casting bool to int gives 0 or 1
     int numVertSpaces = (viewPtrs[0] || viewPtrs[3] || viewPtrs[7]) +
@@ -284,26 +304,36 @@ double DrawProjGroup::calculateAutomaticScale() const
     return result;
 }
 
+//returns the (scaled) bounding rectangle of all the views.
 QRectF DrawProjGroup::getRect() const         //this is current rect, not potential rect
 {
+//    Base::Console().Message("DPG::getRect - views: %d\n", Views.getValues().size());
     DrawProjGroupItem *viewPtrs[10];
     arrangeViewPointers(viewPtrs);
     double width, height;
-    minimumBbViews(viewPtrs, width, height);                           // w,h of just the views at 1:1 scale
+    minimumBbViews(viewPtrs, width, height);                //this is scaled!
     double xSpace = spacingX.getValue() * 3.0 * std::max(1.0,getScale());
     double ySpace = spacingY.getValue() * 2.0 * std::max(1.0,getScale());
-    double rectW = getScale() * width + xSpace;                  //scale the 1:1 w,h and add whitespace
-    double rectH = getScale() * height + ySpace;
+    double rectW = 0.0;
+    double rectH = 0.0;
+    if ( !(DrawUtil::fpCompare(width, 0.0) &&
+           DrawUtil::fpCompare(height, 0.0)) ) {
+        rectW = width + xSpace;
+        rectH = height + ySpace;
+    }
+    double fudge = 1.3;  //make rect a little big to make sure it fits
+    rectW *= fudge;
+    rectH *= fudge;
     return QRectF(0,0,rectW,rectH);
 }
 
-//find area consumed by Views only in 1:1 Scale
+//find area consumed by Views only in current scale
 void DrawProjGroup::minimumBbViews(DrawProjGroupItem *viewPtrs[10],
                                             double &width, double &height) const
 {
     // Get bounding boxes in object scale
     Base::BoundBox3d bboxes[10];
-    makeViewBbs(viewPtrs, bboxes, true);
+    makeViewBbs(viewPtrs, bboxes, true);   //true => scaled
 
     //TODO: note that TLF/TRF/BLF,BRF extend a bit farther than a strict row/col arrangement would suggest.
     //get widest view in each row/column
@@ -412,12 +442,17 @@ App::DocumentObject * DrawProjGroup::addProjection(const char *viewProjType)
             throw Base::TypeError("Error: new projection is not a DPGI!");
         }
         if (view != nullptr) {                        //coverity CID 151722
+            // the label must be set before the view is added
+            view->Label.setValue(viewProjType);
             addView(view);                            //from DrawViewCollection
-            view->Source.setValues( Source.getValues() );
-            view->Scale.setValue( getScale() );
-            view->Type.setValue( viewProjType );
-            view->Label.setValue( viewProjType );
-            view->Source.setValues( Source.getValues() );
+            view->Source.setValues(Source.getValues());
+//            std::vector<DocumentObject*> xLinks;
+//            XSource.getLinks(xLinks);
+//            view->XSource.setValues(xLinks);
+            view->XSource.setValues(XSource.getValues());
+
+            // the Scale is already set by DrawView
+            view->Type.setValue(viewProjType);
             if (strcmp(viewProjType, "Front") != 0 ) {  //not Front!
                 vecs = getDirsFromFront(view);
                 view->Direction.setValue(vecs.first);
@@ -426,10 +461,10 @@ App::DocumentObject * DrawProjGroup::addProjection(const char *viewProjType)
             } else {  //Front
                 Anchor.setValue(view);
                 Anchor.purgeTouched();
+                requestPaint();   //make sure the group object is on the Gui page
                 view->LockPosition.setValue(true);  //lock "Front" position within DPG (note not Page!).
                 view->LockPosition.setStatus(App::Property::ReadOnly,true); //Front should stay locked.
                 view->LockPosition.purgeTouched();
-                requestPaint();   //make sure the group object is on the Gui page
             }
         //        addView(view);                            //from DrawViewCollection
         //        if (view != getAnchor()) {                //anchor is done elsewhere
@@ -607,6 +642,7 @@ gp_Dir DrawProjGroup::vec2dir(Base::Vector3d v)
     return result;
 }
 
+//this can be improved.  this implementation positions views too far apart.
 Base::Vector3d DrawProjGroup::getXYPosition(const char *viewTypeCStr)
 {
     Base::Vector3d result(0.0,0.0,0.0);
@@ -635,14 +671,14 @@ Base::Vector3d DrawProjGroup::getXYPosition(const char *viewTypeCStr)
 
         // Calculate bounding boxes for each displayed view
         Base::BoundBox3d bboxes[10];
-        makeViewBbs(viewPtrs, bboxes);
+        makeViewBbs(viewPtrs, bboxes);         //scaled
 
-        double xSpacing = spacingX.getValue();    //in mm/scale
-        double ySpacing = spacingY.getValue();    //in mm/scale
+        double xSpacing = spacingX.getValue();    //in mm, no scale
+        double ySpacing = spacingY.getValue();    //in mm, no scale
 
         double bigRow    = 0.0;
         double bigCol    = 0.0;
-        for (auto& b: bboxes) {
+        for (auto& b: bboxes) {          //space based on width/height of biggest view
             if (!b.IsValid()) {
                 continue;
             }
@@ -659,6 +695,7 @@ Base::Vector3d DrawProjGroup::getXYPosition(const char *viewTypeCStr)
             bigCol = std::max(bigCol,bigRow);
             bigRow = bigCol;
         }
+        //TODO: find biggest for each row/column and adjust calculation to use bigCol[i], bigRow[j] ?????
 
         if (viewPtrs[0] &&                          //iso
             bboxes[0].IsValid()) {
@@ -742,7 +779,7 @@ int DrawProjGroup::getViewIndex(const char *viewTypeCStr) const
             Base::Console().Warning("DPG: %s - can not find parent page. Using default Projection Type. (1)\n",
                                     getNameInDocument());
             int projConv = getDefProjConv();
-            projType = ProjectionTypeEnums[projConv + 1];
+            projType = ProjectionTypeEnums[projConv];
         }
     } else {
         projType = ProjectionType.getValueAsString();
@@ -791,7 +828,7 @@ int DrawProjGroup::getViewIndex(const char *viewTypeCStr) const
 void DrawProjGroup::arrangeViewPointers(DrawProjGroupItem *viewPtrs[10]) const
 {
     for (int i=0; i<10; ++i) {
-        viewPtrs[i] = NULL;
+        viewPtrs[i] = nullptr;
     }
 
     // Determine layout - should be either "First Angle" or "Third Angle"
@@ -871,7 +908,9 @@ void DrawProjGroup::makeViewBbs(DrawProjGroupItem *viewPtrs[10],
                                           Base::BoundBox3d bboxes[10],
                                           bool documentScale) const
 {
-    for (int i = 0; i < 10; ++i)
+    Base::BoundBox3d empty(Base::Vector3d(0.0, 0.0, 0.0), 0.0);
+    for (int i = 0; i < 10; ++i) {
+        bboxes[i] = empty;
         if (viewPtrs[i]) {
             bboxes[i] = viewPtrs[i]->getBoundingBox();
             if (!documentScale) {
@@ -880,12 +919,8 @@ void DrawProjGroup::makeViewBbs(DrawProjGroupItem *viewPtrs[10],
                 bboxes[i].ScaleY(scale);
                 bboxes[i].ScaleZ(scale);
             }
-        } else {
-            // BoundBox3d defaults to length=(FLOAT_MAX + -FLOAT_MAX)
-            bboxes[i].ScaleX(0);
-            bboxes[i].ScaleY(0);
-            bboxes[i].ScaleZ(0);
         }
+    }
 }
 
 void DrawProjGroup::recomputeChildren(void)
@@ -928,6 +963,7 @@ void DrawProjGroup::updateChildrenScale(void)
             throw Base::TypeError("Error: projection in DPG list is not a DPGI!");
         } else  if(view->Scale.getValue()!=Scale.getValue()) {
             view->Scale.setValue(Scale.getValue());
+            view->recomputeFeature();
         }
     }
 }
@@ -944,8 +980,13 @@ void DrawProjGroup::updateChildrenSource(void)
             Base::Console().Log("PROBLEM - DPG::updateChildrenSource - non DPGI entry in Views! %s\n",
                                     getNameInDocument());
             throw Base::TypeError("Error: projection in DPG list is not a DPGI!");
-        } else if (view->Source.getValues() != Source.getValues()) {
-            view->Source.setValues(Source.getValues());
+        } else {
+            if (view->Source.getValues() != Source.getValues()) {
+                view->Source.setValues(Source.getValues());
+            }
+            if (view->XSource.getValues() != XSource.getValues()) {
+                view->XSource.setValues(XSource.getValues());
+            }
         }
     }
 }
@@ -963,6 +1004,8 @@ void DrawProjGroup::updateChildrenLock(void)
             Base::Console().Log("PROBLEM - DPG::updateChildrenLock - non DPGI entry in Views! %s\n",
                                     getNameInDocument());
             throw Base::TypeError("Error: projection in DPG list is not a DPGI!");
+        } else {
+            view->requestPaint();
         }
     }
 }
@@ -981,34 +1024,6 @@ void DrawProjGroup::updateChildrenEnforce(void)
         }
     }
 }
-
-/*!
- * check if ProjectionGroup fits on Page
- */
-bool DrawProjGroup::checkFit(TechDraw::DrawPage* p) const
-{
-    bool result = true;
-
-    QRectF viewBox = getRect();
-    double fudge = 1.1;
-    double maxWidth = viewBox.width() * fudge;
-    double maxHeight = viewBox.height() * fudge;
-
-    if ( (maxWidth > p->getPageWidth()) ||
-         (maxHeight > p->getPageHeight()) ) {
-        result = false;
-    }
-
-    if (ScaleType.isValue("Automatic")) {                        //expand if too small
-        double magnifyLimit = 0.60;
-        if ( (maxWidth < p->getPageWidth() * magnifyLimit) &&
-             (maxHeight < p->getPageHeight() * magnifyLimit) ) {
-            result = false;
-        }
-    }
-    return result;
-}
-
 
 App::Enumeration DrawProjGroup::usedProjectionType(void)
 {
@@ -1238,10 +1253,7 @@ std::vector<DrawProjGroupItem*> DrawProjGroup::getViewsAsDPGI()
 
 int DrawProjGroup::getDefProjConv(void) const
 {
-    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp")->
-                                                               GetGroup("Preferences")->GetGroup("Mod/TechDraw/General");
-    int defProjConv = hGrp->GetInt("ProjectionAngle",0);
-    return defProjConv;
+    return Preferences::projectionAngle();
 }
 
 /*!

@@ -80,6 +80,9 @@ TaskTransformedParameters::TaskTransformedParameters(ViewProviderTransformed *Tr
         Gui::Document* doc = TransformedView->getDocument();
         this->attachDocument(doc);
     }
+
+    // remember initial transaction ID
+    App::GetApplication().getActiveTransaction(&transactionID);
 }
 
 TaskTransformedParameters::TaskTransformedParameters(TaskMultiTransformParameters *parentTask)
@@ -116,6 +119,14 @@ int TaskTransformedParameters::getUpdateViewTimeout() const
     return 500;
 }
 
+void TaskTransformedParameters::addObject(App::DocumentObject*)
+{
+}
+
+void TaskTransformedParameters::removeObject(App::DocumentObject*)
+{
+}
+
 bool TaskTransformedParameters::originalSelected(const Gui::SelectionChanges& msg)
 {
     if (msg.Type == Gui::SelectionChanges::AddSelection && (
@@ -132,15 +143,21 @@ bool TaskTransformedParameters::originalSelected(const Gui::SelectionChanges& ms
             std::vector<App::DocumentObject*> originals = pcTransformed->Originals.getValues();
             std::vector<App::DocumentObject*>::iterator o = std::find(originals.begin(), originals.end(), selectedObject);
             if (selectionMode == addFeature) {
-                if (o == originals.end())
+                if (o == originals.end()) {
                     originals.push_back(selectedObject);
-                else
+                    addObject(selectedObject);
+                }
+                else {
                     return false; // duplicate selection
+                }
             } else {
-                if (o != originals.end())
+                if (o != originals.end()) {
                     originals.erase(o);
-                else
+                    removeObject(selectedObject);
+                }
+                else {
                     return false;
+                }
             }
             setupTransaction();
             pcTransformed->Originals.setValues(originals);
@@ -153,13 +170,21 @@ bool TaskTransformedParameters::originalSelected(const Gui::SelectionChanges& ms
     return false;
 }
 
-void TaskTransformedParameters::setupTransaction() {
+void TaskTransformedParameters::setupTransaction()
+{
+    auto obj = getObject();
+    if (!obj)
+        return;
+
     int tid = 0;
-    const char *name = App::GetApplication().getActiveTransaction(&tid);
+    App::GetApplication().getActiveTransaction(&tid);
+    if (tid && tid == transactionID)
+        return;
+
+    // open a transaction if none is active
     std::string n("Edit ");
-    n += getObject()->Label.getValue();
-    if(!name || n != name)
-        App::GetApplication().setActiveTransaction(n.c_str());
+    n += obj->Label.getValue();
+    transactionID = App::GetApplication().setActiveTransaction(n.c_str());
 }
 
 void TaskTransformedParameters::onButtonAddFeature(bool checked)
@@ -403,7 +428,6 @@ bool TaskDlgTransformedParameters::reject()
 {
     // ensure that we are not in selection mode
     parameter->exitSelectionMode();
-
     return TaskDlgFeatureParameters::reject ();
 }
 

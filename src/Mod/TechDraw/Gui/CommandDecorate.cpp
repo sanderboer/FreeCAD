@@ -86,7 +86,7 @@ bool _checkSelectionHatch(Gui::Command* cmd);
 //    sToolTipText    = QT_TR_NOOP("Add a line to a view");
 //    sWhatsThis      = "TechDraw_LeaderLine";
 //    sStatusTip      = sToolTipText;
-//    sPixmap         = "actions/techdraw-mline";
+//    sPixmap         = "actions/techdraw-LeaderLine";
 //}
 
 //void CmdTechDrawLeaderLine::activated(int iMsg)
@@ -399,12 +399,10 @@ void CmdTechDrawImage::activated(int iMsg)
     std::string PageName = page->getNameInDocument();
 
     // Reading an image
-    std::string defaultDir = App::Application::getResourceDir();
-    QString qDir = QString::fromUtf8(defaultDir.data(),defaultDir.size());
     QString fileName = Gui::FileDialog::getOpenFileName(Gui::getMainWindow(),
-                                                   QString::fromUtf8(QT_TR_NOOP("Select an Image File")),
-                                                   qDir,
-                                                   QString::fromUtf8(QT_TR_NOOP("Image (*.png *.jpg *.jpeg)")));
+        QString::fromUtf8(QT_TR_NOOP("Select an Image File")),
+        QString::null,
+        QString::fromUtf8(QT_TR_NOOP("Image (*.png *.jpg *.jpeg)")));
 
     if (!fileName.isEmpty())
     {

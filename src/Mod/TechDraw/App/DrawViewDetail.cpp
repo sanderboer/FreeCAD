@@ -79,6 +79,7 @@
 #include <Mod/Part/App/PartFeature.h>
 #include <Mod/Part/App/TopoShape.h>
 
+#include "Preferences.h"
 #include "Geometry.h"
 #include "GeometryObject.h"
 #include "Cosmetic.h"
@@ -100,8 +101,6 @@ using namespace std;
 PROPERTY_SOURCE(TechDraw::DrawViewDetail, TechDraw::DrawViewPart)
 
 DrawViewDetail::DrawViewDetail()
-// :
-//    m_mattingStyle(0)
 {
     static const char *dgroup = "Detail";
 
@@ -117,7 +116,6 @@ DrawViewDetail::DrawViewDetail()
     //hide Properties not relevant to DVDetail
     Direction.setStatus(App::Property::ReadOnly,true);   //Should be same as BaseView
     Rotation.setStatus(App::Property::ReadOnly,true);    //same as BaseView
-
 }
 
 DrawViewDetail::~DrawViewDetail()
@@ -147,13 +145,15 @@ void DrawViewDetail::onChanged(const App::Property* prop)
                                   std::string(Reference.getValue());
             Label.setValue(lblText);
         }
-        if ((prop == &Reference)  ||
-           (prop == &Radius)     ||
-           (prop == &AnchorPoint))  {
-//            BaseView.getValue()->touch();    //hack.  sb "update graphics"
-            enforceRecompute();
+        if ((prop == &Reference) ||
+            (prop == &Radius) ||
+            (prop == &BaseView)) {
+            requestPaint();
         }
-
+        if (prop == &AnchorPoint)  {
+            // to see AnchorPoint changes repainting is not enough, we must recompute
+            recomputeFeature(true);
+        }
     }
     DrawView::onChanged(prop);
 }
@@ -225,6 +225,30 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
         //unblock
     }
 
+    detailExec(shape, dvp, dvs);
+    addShapes2d();
+
+    //second pass if required
+    if (ScaleType.isValue("Automatic")) {
+        if (!checkFit()) {
+            double newScale = autoScale();
+            Scale.setValue(newScale);
+            Scale.purgeTouched();
+            if (geometryObject != nullptr) {
+                delete geometryObject;
+                geometryObject = nullptr;
+                detailExec(shape, dvp, dvs);
+            }
+        }
+    }
+    dvp->requestPaint();  //to refresh detail highlight!
+    return DrawView::execute();
+}
+
+void DrawViewDetail::detailExec(TopoDS_Shape shape,
+                                DrawViewPart* dvp,
+                                DrawViewSection* dvs)
+{
     Base::Vector3d anchor = AnchorPoint.getValue();    //this is a 2D point (in unrotated coords)
     Base::Vector3d dirDetail = dvp->Direction.getValue();
 
@@ -232,20 +256,22 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
     double scale = getScale();
 
     BRepBuilderAPI_Copy BuilderCopy(shape);
-    TopoDS_Shape copyShape = BuilderCopy.Shape();
+    TopoDS_Shape myShape = BuilderCopy.Shape();
 
-    gp_Pnt gpCenter = TechDraw::findCentroid(copyShape,
+    gp_Pnt gpCenter = TechDraw::findCentroid(myShape,
                                              dirDetail);
     Base::Vector3d shapeCenter = Base::Vector3d(gpCenter.X(),gpCenter.Y(),gpCenter.Z());
+    m_saveCentroid = shapeCenter;              //centroid of original shape
 
     if (dvs != nullptr) {
         //section cutShape should already be on origin
     } else {
-        copyShape = TechDraw::moveShape(copyShape,                     //centre shape on origin
+        myShape = TechDraw::moveShape(myShape,                     //centre shape on origin
                                        -shapeCenter);
     }
 
     shapeCenter = Base::Vector3d(0.0, 0.0, 0.0);
+
 
     gp_Ax2 viewAxis;
 
@@ -255,7 +281,7 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
 
     Bnd_Box bbxSource;
     bbxSource.SetGap(0.0);
-    BRepBndLib::Add(copyShape, bbxSource);
+    BRepBndLib::Add(myShape, bbxSource);
     double diag = sqrt(bbxSource.SquareExtent());
 
     Base::Vector3d toolPlaneOrigin = anchorOffset3d + dirDetail * diag * -1.0;    //center tool about anchor
@@ -269,40 +295,54 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
     TopoDS_Face aProjFace = mkFace.Face();
     if(aProjFace.IsNull()) {
         Base::Console().Warning("DVD::execute - %s - failed to create tool base face\n", getNameInDocument());
-        return DrawView::execute();
+        return;
     }
 
     Base::Vector3d extrudeVec = dirDetail * extrudeLength;
     gp_Vec extrudeDir(extrudeVec.x,extrudeVec.y,extrudeVec.z);
     TopoDS_Shape tool = BRepPrimAPI_MakePrism(aProjFace, extrudeDir, false, true).Shape();
 
-    BRepAlgoAPI_Common mkCommon(copyShape,tool);
-    if (!mkCommon.IsDone()) {
-        Base::Console().Warning("DVD::execute - %s - detail cut operation failed (1)\n", getNameInDocument());
-        return DrawView::execute();
-    }
-    if (mkCommon.Shape().IsNull()) {
-        Base::Console().Warning("DVD::execute - %s - detail cut operation failed (2)\n", getNameInDocument());
-        return DrawView::execute();
-    }
 
-    //Did we get a solid?
-    TopExp_Explorer xp;
-    xp.Init(mkCommon.Shape(),TopAbs_SOLID);
-    if (!(xp.More() == Standard_True)) {
-        Base::Console().Warning("DVD::execute - mkCommon.Shape is not a solid!\n");
+    BRep_Builder builder;
+    TopoDS_Compound pieces;
+    builder.MakeCompound(pieces);
+    TopExp_Explorer expl(myShape, TopAbs_SOLID);
+    int indb = 0;
+    int outdb = 0;
+    for (; expl.More(); expl.Next()) {
+        indb++;
+        const TopoDS_Solid& s = TopoDS::Solid(expl.Current());
+
+        BRepAlgoAPI_Common mkCommon(s,tool);
+        if (!mkCommon.IsDone()) {
+//            Base::Console().Warning("DVD::execute - %s - detail cut operation failed (1)\n", getNameInDocument());
+            continue;
+        }
+        if (mkCommon.Shape().IsNull()) {
+//            Base::Console().Warning("DVD::execute - %s - detail cut operation failed (2)\n", getNameInDocument());
+            continue;
+        }
+        //this might be overkill for piecewise algo
+        //Did we get at least 1 solid?
+        TopExp_Explorer xp;
+        xp.Init(mkCommon.Shape(),TopAbs_SOLID);
+        if (!(xp.More() == Standard_True)) {
+//            Base::Console().Warning("DVD::execute - mkCommon.Shape is not a solid!\n");
+            continue;
+        }
+        builder.Add(pieces, mkCommon.Shape());
+        outdb++;
     }
-    TopoDS_Shape detail = mkCommon.Shape();
 
     if (debugDetail()) {
         BRepTools::Write(tool, "DVDTool.brep");            //debug
-        BRepTools::Write(copyShape, "DVDCopy.brep");       //debug
-        BRepTools::Write(detail, "DVDCommon.brep");        //debug
+        BRepTools::Write(myShape, "DVDCopy.brep");       //debug
+        BRepTools::Write(pieces, "DVDCommon.brep");        //debug
     }
 
     Bnd_Box testBox;
     testBox.SetGap(0.0);
-    BRepBndLib::Add(detail, testBox);
+    BRepBndLib::Add(pieces, testBox);
     if (testBox.IsVoid()) {
         TechDraw::GeometryObject* go = getGeometryObject();
         if (go != nullptr) {
@@ -310,7 +350,7 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
         }
         dvp->requestPaint();
         Base::Console().Warning("DVD::execute - %s - detail area contains no geometry\n", getNameInDocument());
-        return DrawView::execute();
+        return;
     }
 
 //for debugging show compound instead of common
@@ -318,7 +358,7 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
 //    TopoDS_Compound Comp;
 //    builder.MakeCompound(Comp);
 //    builder.Add(Comp, tool);
-//    builder.Add(Comp, copyShape);
+//    builder.Add(Comp, myShape);
 
     gp_Pnt inputCenter;
     try {
@@ -327,12 +367,14 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
     Base::Vector3d centroid(inputCenter.X(),
                             inputCenter.Y(),
                             inputCenter.Z());
+    m_saveCentroid += centroid;              //center of massaged shape
 
     Base::Vector3d stdOrg(0.0,0.0,0.0);
     gp_Ax2 viewAxis = dvp->getProjectionCS(stdOrg);  //sb same CS as base view. 
 
     //center shape on origin
-    TopoDS_Shape centeredShape = TechDraw::moveShape(detail,
+//    TopoDS_Shape centeredShape = TechDraw::moveShape(detail,
+    TopoDS_Shape centeredShape = TechDraw::moveShape(pieces,
                                                      centroid * -1.0);
 
     TopoDS_Shape scaledShape = TechDraw::scaleShape(centeredShape,
@@ -358,7 +400,7 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
         }
         catch (Standard_Failure& e4) {
             Base::Console().Log("LOG - DVD::execute - extractFaces failed for %s - %s **\n",getNameInDocument(),e4.GetMessageString());
-            return new App::DocumentObjectExecReturn(e4.GetMessageString());
+            return;
         }
     }
 
@@ -366,18 +408,15 @@ App::DocumentObjectExecReturn *DrawViewDetail::execute(void)
     }
     catch (Standard_Failure& e1) {
         Base::Console().Message("LOG - DVD::execute - failed to create detail %s - %s **\n",getNameInDocument(),e1.GetMessageString());
-
-        return new App::DocumentObjectExecReturn(e1.GetMessageString());
+        return;
     }
 
     addCosmeticVertexesToGeom();
     addCosmeticEdgesToGeom();
     addCenterLinesToGeom();
 
-    requestPaint();
-    dvp->requestPaint();  //to refresh detail highlight!
+    addReferencesToGeom();   //what if landmarks are outside detail area??
 
-    return DrawView::execute();
 }
 
 double DrawViewDetail::getFudgeRadius()
@@ -394,17 +433,20 @@ bool DrawViewDetail::debugDetail(void) const
     return result;
 }
 
+void DrawViewDetail::unsetupObject()
+{
+//    Base::Console().Message("DVD::unsetupObject()\n");
+    App::DocumentObject* baseObj = BaseView.getValue();
+    DrawView* base = dynamic_cast<DrawView*>(baseObj);
+    if (base != nullptr) {
+        base->requestPaint();
+    }
+
+}
+
 
 void DrawViewDetail::getParameters()
 {
-// what parameters are useful?
-// handleFaces
-// radiusFudge?
-
-//    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
-//        .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/TechDraw");
-//    m_mattingStyle = hGrp->GetInt("MattingStyle", 0);
-
 }
 
 // Python Drawing feature ---------------------------------------------------------

@@ -35,9 +35,11 @@
 #include <Base/Console.h>
 #include <Base/Parameter.h>
 
+#include "PreferencesGui.h"
 #include "QGIEdge.h"
 
 using namespace TechDrawGui;
+using namespace TechDraw;
 
 QGIEdge::QGIEdge(int index) :
     projIndex(index),
@@ -83,7 +85,7 @@ QColor QGIEdge::getHiddenColor()
 {
     Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
         .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/TechDraw/Colors");
-    App::Color fcColor = App::Color((uint32_t) hGrp->GetUnsigned("HiddenColor", 0x08080800));
+    App::Color fcColor = App::Color((uint32_t) hGrp->GetUnsigned("HiddenColor", 0x000000FF));
     return fcColor.asValue<QColor>();
 }
 
@@ -91,16 +93,15 @@ Qt::PenStyle QGIEdge::getHiddenStyle()
 {
     Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp")->
                                          GetGroup("Preferences")->GetGroup("Mod/TechDraw/General");
-    Qt::PenStyle hidStyle = static_cast<Qt::PenStyle> (hGrp->GetInt("HiddenLine",1));
+    //Qt::PenStyle - NoPen, Solid, Dashed, ...
+    //Preferences::General - Solid, Dashed                                     
+    Qt::PenStyle hidStyle = static_cast<Qt::PenStyle> (hGrp->GetInt("HiddenLine",0) + 1);
     return hidStyle;
 }
 
  double QGIEdge::getEdgeFuzz(void) const
 {
-    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp")->
-                                         GetGroup("Preferences")->GetGroup("Mod/TechDraw/General");
-    double result = hGrp->GetFloat("EdgeFuzz",10.0);
-    return result;
+    return PreferencesGui::edgeFuzz();
 }
 
 

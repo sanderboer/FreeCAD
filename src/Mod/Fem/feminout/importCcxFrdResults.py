@@ -1,8 +1,9 @@
 # ***************************************************************************
-# *                                                                         *
 # *   Copyright (c) 2013 Joachim Zettler                                    *
 # *   Copyright (c) 2013 Juergen Riegel <FreeCAD@juergen-riegel.net>        *
 # *   Copyright (c) 2016 Bernd Hahnebach <bernd@bimstatik.org>              *
+# *                                                                         *
+# *   This file is part of the FreeCAD CAx development system.              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -127,7 +128,7 @@ def importFrd(
 
                 # complementary result object calculations
                 import femresult.resulttools as restools
-                import femtools.femutils as femutils
+                from femtools import femutils
                 if not res_obj.MassFlowRate:
                     # information 1:
                     # only compact result if not Flow 1D results
@@ -151,7 +152,7 @@ def importFrd(
 
                 # fill DisplacementLengths
                 res_obj = restools.add_disp_apps(res_obj)
-                # fill StressValues
+                # fill vonMises
                 res_obj = restools.add_von_mises(res_obj)
                 if res_obj.getParentGroup():
                     has_reinforced_mat = False

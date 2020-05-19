@@ -100,6 +100,8 @@ SET(Draw_SRCS
     DrawViewDimension.h
     DrawViewDimExtent.cpp
     DrawViewDimExtent.h
+    LandmarkDimension.cpp
+    LandmarkDimension.h
     DrawViewBalloon.cpp
     DrawViewBalloon.h
     DrawViewSection.cpp
@@ -151,6 +153,10 @@ SET(TechDraw_SRCS
     DrawProjectSplit.h
     LineGroup.cpp
     LineGroup.h
+    ArrowPropEnum.cpp
+    ArrowPropEnum.h
+    Preferences.cpp
+    Preferences.h
 )
 
 SET(Geometry_SRCS

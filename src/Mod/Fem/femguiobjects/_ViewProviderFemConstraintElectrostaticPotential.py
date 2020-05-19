@@ -1,6 +1,7 @@
 # ***************************************************************************
-# *                                                                         *
 # *   Copyright (c) 2017 Markus Hovorka <m.hovorka@live.de>                 *
+# *                                                                         *
+# *   This file is part of the FreeCAD CAx development system.              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -30,32 +31,23 @@ __url__ = "http://www.freecadweb.org"
 
 import FreeCAD
 import FreeCADGui
-from . import ViewProviderFemConstraint
-
-# for the panel
-import femtools.femutils as femutils
 from FreeCAD import Units
+
 from . import FemSelectionWidgets
+from . import ViewProviderFemConstraint
+from femtools import femutils
+from femtools import membertools
 
 
 class ViewProxy(ViewProviderFemConstraint.ViewProxy):
 
-    def getIcon(self):
-        return ":/icons/fem-constraint-electrostatic-potential.svg"
-
     def setEdit(self, vobj, mode=0):
-        # hide all meshes
-        for o in FreeCAD.ActiveDocument.Objects:
-            if o.isDerivedFrom("Fem::FemMeshObject"):
-                o.ViewObject.hide()
-        # show task panel
-        task = _TaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(task)
-        return True
-
-    def unsetEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
-        return True
+        ViewProviderFemConstraint.ViewProxy.setEdit(
+            self,
+            vobj,
+            mode,
+            _TaskPanel
+        )
 
 
 class _TaskPanel(object):
@@ -68,8 +60,8 @@ class _TaskPanel(object):
             FreeCAD.getHomePath() + "Mod/Fem/Resources/ui/ElectrostaticPotential.ui")
         self._initParamWidget()
         self.form = [self._refWidget, self._paramWidget]
-        analysis = femutils.findAnalysisOfMember(obj)
-        self._mesh = femutils.get_single_member(analysis, "Fem::FemMeshObject")
+        analysis = obj.getParentGroup()
+        self._mesh = membertools.get_single_member(analysis, "Fem::FemMeshObject")
         self._part = None
         if self._mesh is not None:
             self._part = femutils.get_part_to_mesh(self._mesh)
@@ -119,6 +111,14 @@ class _TaskPanel(object):
         self._paramWidget.potentialConstantBox.setChecked(
             self._obj.PotentialConstant)
 
+        self._paramWidget.electricInfinityBox.setChecked(
+            self._obj.ElectricInfinity)
+
+        self._paramWidget.capacitanceBodyBox.setChecked(
+            not self._obj.CapacitanceBodyEnabled)
+        self._paramWidget.capacitanceBody_spinBox.setValue(
+            self._obj.CapacitanceBody)
+
     def _applyWidgetChanges(self):
         unit = "V"
         self._obj.PotentialEnabled = \
@@ -139,3 +139,11 @@ class _TaskPanel(object):
             if quantity is not None:
                 self._obj.Potential = float(quantity.getValueAs(unit))
         self._obj.PotentialConstant = self._paramWidget.potentialConstantBox.isChecked()
+
+        self._obj.ElectricInfinity = self._paramWidget.electricInfinityBox.isChecked()
+
+        self._obj.CapacitanceBodyEnabled = \
+            not self._paramWidget.capacitanceBodyBox.isChecked()
+        if self._obj.CapacitanceBodyEnabled:
+            self._paramWidget.capacitanceBody_spinBox.setEnabled(True)
+            self._obj.CapacitanceBody = self._paramWidget.capacitanceBody_spinBox.value()

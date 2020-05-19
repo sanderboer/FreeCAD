@@ -55,6 +55,7 @@ public:
     /// returns a list of all possible modes
     virtual std::vector<std::string> getDisplayModes(void) const;
     virtual void updateData(const App::Property*);
+    virtual void onChanged(const App::Property* p);
     virtual std::vector<App::DocumentObject*> claimChildren(void) const;
     virtual bool setEdit(int ModNum);
     virtual void unsetEdit(int ModNum);
@@ -66,7 +67,8 @@ public:
     std::string prefFontName(void);
     double prefFontSize(void);
     double prefTileTextAdjust(void);
-
+    virtual bool onDelete(const std::vector<std::string> &);
+    virtual bool canDelete(App::DocumentObject* obj) const;
     
 };
 

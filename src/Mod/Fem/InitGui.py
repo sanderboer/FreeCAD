@@ -1,14 +1,6 @@
-# Fem gui init module
-# (c) 2009 Juergen Riegel
-#
-# Gathering all the information to start FreeCAD
-# This is the second one of three init scripts, the third one
-# runs when the gui is up
-
 # ***************************************************************************
-# *   (c) Juergen Riegel (juergen.riegel@web.de) 2009                       *
-# *                                                                         *
-# *   This file is part of the FreeCAD CAx development system.              *
+# *   Copyright (c) 2009 Juergen Riegel <juergen.riegel@web.de>             *
+# *   Copyright (c) 2020 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -26,11 +18,37 @@
 # *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
 # *   USA                                                                   *
 # *                                                                         *
-# *   Juergen Riegel 2002                                                   *
-# ***************************************************************************/
+# ***************************************************************************
+"""FEM module Gui init script
 
+Gathering all the information to start FreeCAD.
+This is the second one of three init scripts.
+The third one runs when the gui is up.
+
+The script is executed using exec().
+This happens inside srd/Gui/FreeCADGuiInit.py
+All imports made there are available here too.
+Thus no need to import them here.
+But the import code line is used anyway to get flake8 quired.
+Since they are cached they will not be imported twice.
+"""
+
+__title__ = "FEM module Gui init script"
+__author__ = "Juergen Riegel, Bernd Hahnebach"
+__url__ = "http://www.freecadweb.org"
+
+# imports to get flake8 quired
+import sys
 import FreeCAD
 import FreeCADGui
+from FreeCADGui import Workbench
+
+# needed imports
+from femtools.migrate_gui import FemMigrateGui
+
+
+# migrate old FEM Gui objects
+sys.meta_path.append(FemMigrateGui())
 
 
 class FemWorkbench(Workbench):
@@ -46,8 +64,13 @@ class FemWorkbench(Workbench):
         import Fem
         import FemGui
         import femcommands.commands
+        # dummy usage to get flake8 and lgtm quiet
+        False if Fem.__name__ else True
+        False if FemGui.__name__ else True
+        False if femcommands.commands.__name__ else True
 
     def GetClassName(self):
+        # see https://forum.freecadweb.org/viewtopic.php?f=10&t=43300
         return "FemGui::Workbench"
 
 

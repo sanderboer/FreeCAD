@@ -198,6 +198,12 @@ public:
     void setupContextMenu(const char* recipient, MenuItem*) const;
     //@}
 
+    /** @name Appearance */
+    //@{
+    /// Activate a named workbench
+    void setStyleSheet(const QString& qssFile, bool tiledBackground);
+    //@}
+
     /** @name User Commands */
     //@{
     /// Get macro manager
@@ -252,7 +258,9 @@ public:
 
     static PyObject* sRunCommand               (PyObject *self,PyObject *args);
     static PyObject* sAddCommand               (PyObject *self,PyObject *args);
+    static PyObject* sGetCommandInfo           (PyObject *self,PyObject *args);
     static PyObject* sListCommands             (PyObject *self,PyObject *args);
+    static PyObject* sGetCommandShortcut       (PyObject *self,PyObject *args);
     static PyObject* sIsCommandActive          (PyObject *self,PyObject *args);
     static PyObject* sUpdateCommands           (PyObject *self,PyObject *args);
 
@@ -264,7 +272,8 @@ public:
     static PyObject* sOpen                     (PyObject *self,PyObject *args); // open Python scripts
     static PyObject* sInsert                   (PyObject *self,PyObject *args); // open Python scripts
     static PyObject* sExport                   (PyObject *self,PyObject *args);
-    static PyObject* sReload                   (PyObject *self,PyObject *args);
+    static PyObject* sReload                   (PyObject *self,PyObject *args); // reload FCStd file
+    static PyObject* sLoadFile                 (PyObject *self,PyObject *args); // open all types of files
 
     static PyObject* sCoinRemoveAllChildren    (PyObject *self,PyObject *args);
 

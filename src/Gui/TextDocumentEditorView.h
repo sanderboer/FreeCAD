@@ -24,8 +24,6 @@
 #ifndef GUI_TEXTDOCUMENTEDITORVIEW_H
 #define GUI_TEXTDOCUMENTEDITORVIEW_H
 
-#include "PreCompiled.h"
-
 #include <string>
 #include <boost/signals2.hpp>
 #include <QPlainTextEdit>
@@ -55,6 +53,13 @@ public:
 
     QPlainTextEdit* getEditor() const { return editor; }
     App::TextDocument* getTextObject() const { return textDocument; }
+    QStringList undoActions() const;
+    QStringList redoActions() const;
+
+protected:
+    void showEvent(QShowEvent*) override;
+    void hideEvent(QHideEvent*) override;
+    void closeEvent(QCloseEvent*) override;
 
 private:
     void setupEditor();
@@ -71,6 +76,7 @@ private:
     boost::signals2::connection textConnection;
     boost::signals2::connection labelConnection;
     bool sourceModified = false;
+    bool aboutToClose = false;
 };
 
 }

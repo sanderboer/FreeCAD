@@ -43,13 +43,16 @@ public:
 
 private Q_SLOTS:
     void onLengthChanged(double);
+    void onAngleChanged(double);
     void onRefDeleted(void);
 
 protected:
     virtual void clearButtons(const selectionModes notThis);
+    bool event(QEvent *e);
     void changeEvent(QEvent *e);
     virtual void onSelectionChanged(const Gui::SelectionChanges& msg);
     double getLength(void) const;
+    double getAngle(void) const;
 
 private:
     Ui_TaskChamferParameters* ui;

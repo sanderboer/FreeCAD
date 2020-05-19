@@ -58,16 +58,17 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     Gui::MenuItem* item = root->findItem("&Windows");
 
 // == Profile menu ==========================================
-    Gui::MenuItem* profile = new Gui::MenuItem;
+/*    Gui::MenuItem* profile = new Gui::MenuItem;
     root->insertItem(item, profile);
     profile->setCommand("P&rofiles");
 
-    *profile << "Sketcher_ProfilesHexagon1";
+    *profile << "Sketcher_ProfilesHexagon1";*/
 
 // == Sketcher menu ==========================================
 
     Gui::MenuItem* sketch = new Gui::MenuItem;
-    root->insertItem(profile, sketch);
+//    root->insertItem(profile, sketch);
+    root->insertItem(item, sketch);
     sketch->setCommand("S&ketch");
     Gui::MenuItem* geom = new Gui::MenuItem();
     geom->setCommand("Sketcher geometries");
@@ -90,6 +91,7 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     addSketcherWorkbenchVirtualSpace(*virtualspace);
 
     addSketcherWorkbenchSketchActions( *sketch );
+    *sketch << "Sketcher_StopOperation";
     *sketch << geom
             << cons
             << consaccel
@@ -181,7 +183,8 @@ inline void SketcherAddWorkspaceRegularPolygon<Gui::MenuItem>(Gui::MenuItem& geo
             << "Sketcher_CreatePentagon"
             << "Sketcher_CreateHexagon"
             << "Sketcher_CreateHeptagon"
-            << "Sketcher_CreateOctagon";
+            << "Sketcher_CreateOctagon"
+            << "Sketcher_CreateRegularPolygon";
 }
 template <>
 inline void SketcherAddWorkspaceRegularPolygon<Gui::ToolBarItem>(Gui::ToolBarItem& geom){

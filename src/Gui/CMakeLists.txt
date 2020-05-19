@@ -280,7 +280,7 @@ set(Gui_MOC_HDRS
     Assistant.h
     AutoSaver.h
     CallTips.h
-    CombiView.h
+    ComboView.h
     Control.h
     Clipping.h
     DemoMode.h
@@ -312,6 +312,7 @@ set(Gui_MOC_HDRS
     DlgPropertyLink.h
     DlgReportViewImp.h
     DlgSettings3DViewImp.h
+    DlgSettingsNavigation.h
     DlgSettingsViewColor.h
     DlgSettingsColorGradientImp.h
     DlgSettingsDocumentImp.h
@@ -347,6 +348,7 @@ set(Gui_MOC_HDRS
     InputField.h
     PrefWidgets.h
     ProgressBar.h
+    ProgressDialog.h
     PropertyPage.h
     PropertyView.h
     PythonConsole.h
@@ -435,6 +437,7 @@ SET(Gui_UIC_SRCS
     DlgPropertyLink.ui
     DlgReportView.ui
     DlgSettings3DView.ui
+    DlgSettingsNavigation.ui
     DlgSettingsUnits.ui
     DlgSettingsViewColor.ui
     DlgSettingsColorGradient.ui
@@ -659,6 +662,7 @@ SET(Dialog_Settings_CPP_SRCS
     DlgPreferencesImp.cpp
     DlgReportViewImp.cpp
     DlgSettings3DViewImp.cpp
+    DlgSettingsNavigation.cpp
     DlgSettingsUnitsImp.cpp
     DlgSettingsViewColor.cpp
     DlgSettingsColorGradientImp.cpp
@@ -673,6 +677,7 @@ SET(Dialog_Settings_HPP_SRCS
     DlgPreferencesImp.h
     DlgReportViewImp.h
     DlgSettings3DViewImp.h
+    DlgSettingsNavigation.h
     DlgSettingsUnitsImp.h
     DlgSettingsViewColor.h
     DlgSettingsColorGradientImp.h
@@ -689,6 +694,7 @@ SET(Dialog_Settings_SRCS
     DlgPreferences.ui
     DlgReportView.ui
     DlgSettings3DView.ui
+    DlgSettingsNavigation.ui
     DlgSettingsUnits.ui
     DlgSettingsViewColor.ui
     DlgSettingsColorGradient.ui
@@ -700,7 +706,7 @@ SOURCE_GROUP("Dialog\\Settings" FILES ${Dialog_Settings_SRCS})
 
 # The dock windows sources
 SET(Dock_Windows_CPP_SRCS
-    CombiView.cpp
+    ComboView.cpp
     DockWindow.cpp
     PropertyView.cpp
     ReportView.cpp
@@ -716,7 +722,7 @@ SET(Dock_Windows_CPP_SRCS
     DAGView/DAGFilter.cpp
 )
 SET(Dock_Windows_HPP_SRCS
-    CombiView.h
+    ComboView.h
     DockWindow.h
     PropertyView.h
     ReportView.h
@@ -1118,6 +1124,7 @@ SET(Widget_CPP_SRCS
     PrefWidgets.cpp
     InputField.cpp
     ProgressBar.cpp
+    ProgressDialog.cpp
     QuantitySpinBox.cpp
     SpinBox.cpp
     Splashscreen.cpp
@@ -1132,6 +1139,7 @@ SET(Widget_HPP_SRCS
     PrefWidgets.h
     InputField.h
     ProgressBar.h
+    ProgressDialog.h
     QuantitySpinBox.h
     QuantitySpinBox_p.h
     SpinBox.h
@@ -1215,6 +1223,7 @@ SET(FreeCADGui_CPP_SRCS
     DocumentObserver.cpp
     DocumentObserverPython.cpp
     ExpressionBinding.cpp
+    ExpressionBindingPy.cpp
     GraphicsViewZoom.cpp
     ExpressionCompleter.cpp
     GuiApplication.cpp
@@ -1241,7 +1250,8 @@ SET(FreeCADGui_SRCS
     DocumentModel.h
     DocumentObserver.h
     DocumentObserverPython.h
-    ExpressionBinding.cpp
+    ExpressionBinding.h
+    ExpressionBindingPy.h
     ExpressionCompleter.h
     FreeCADGuiInit.py
     GraphicsViewZoom.h
@@ -1366,3 +1376,41 @@ else(WIN32)
     INSTALL(FILES Icons/freecad.xpm DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pixmaps)
     INSTALL(FILES Icons/freecad-doc.svg DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/mimetypes RENAME application-x-extension-fcstd.svg)
 endif(WIN32)
+
+set(FreeCADGui_Scripts
+    RemoteDebugger.ui
+    RemoteDebugger.py
+)
+
+set(FreeCADGui_Configs
+    3Dconnexion/3DConnexion.xml
+)
+
+add_custom_target(FreeCADGui_Resources ALL
+    SOURCES ${FreeCADGui_Scripts} ${FreeCADGui_Configs}
+)
+
+fc_copy_sources(FreeCADGui_Resources
+    ${CMAKE_BINARY_DIR}/Ext/freecad/gui
+    ${FreeCADGui_Scripts}
+)
+
+fc_target_copy_resource(FreeCADGui_Resources
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}
+    ${FreeCADGui_Configs}
+)
+
+INSTALL(
+    FILES
+        ${FreeCADGui_Scripts}
+    DESTINATION
+        Ext/freecad/gui
+)
+
+INSTALL(
+    FILES
+        ${FreeCADGui_Configs}
+    DESTINATION
+        ${CMAKE_INSTALL_DATADIR}/3Dconnexion
+)

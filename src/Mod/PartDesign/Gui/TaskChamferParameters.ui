@@ -18,8 +18,12 @@
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QToolButton" name="buttonRefAdd">
+       <property name="toolTip">
+        <string>Click button to enter selection mode,
+click again to end selection</string>
+       </property>
        <property name="text">
-        <string>Add ref</string>
+        <string>Add</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
@@ -28,8 +32,12 @@
      </item>
      <item>
       <widget class="QToolButton" name="buttonRefRemove">
+       <property name="toolTip">
+        <string>Click button to enter selection mode,
+click again to end selection</string>
+       </property>
        <property name="text">
-        <string>Remove ref</string>
+        <string>Remove</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
@@ -39,17 +47,59 @@
     </layout>
    </item>
    <item>
-    <widget class="QListWidget" name="listWidgetReferences"/>
-   </item>
-   <item>
-      <widget class="Gui::QuantitySpinBox" name="chamferDistance"/>
-   </item>
-   <item>
-    <widget class="QLabel" name="label">
-     <property name="text">
-      <string>Size:</string>
+    <widget class="QListWidget" name="listWidgetReferences">
+     <property name="toolTip">
+      <string>- select an item to highlight it
+- double-click on an item to see the chamfers</string>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::ExtendedSelection</enum>
      </property>
     </widget>
+   </item>
+      <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>Size</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="Gui::QuantitySpinBox" name="chamferDistance" native="true" />
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QLabel" name="label3">
+       <property name="text">
+        <string>Angle</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="Gui::QuantitySpinBox" name="chamferAngle" native="true">
+       <property name="unit" stdset="0">
+        <string notr="true">deg</string>
+       </property>
+       <property name="minimum" stdset="0">
+        <double>0.000000000000000</double>
+       </property>
+       <property name="maximum" stdset="0">
+        <double>180.000000000000000</double>
+       </property>
+       <property name="singleStep" stdset="0">
+        <double>0.100000000000000</double>
+       </property>
+       <property name="value" stdset="0">
+        <double>45.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

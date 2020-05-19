@@ -22,7 +22,6 @@
 # *                                                                         *
 # ***************************************************************************
 import FreeCAD
-import Part
 import Path
 import PathScripts.PathDressup as PathDressup
 import PathScripts.PathGeom as PathGeom
@@ -35,6 +34,10 @@ import math
 from PathScripts.PathDressupTagPreferences import HoldingTagPreferences
 from PathScripts.PathUtils import waiting_effects
 from PySide import QtCore
+
+# lazily loaded modules
+from lazy_loader.lazy_loader import LazyLoader
+Part = LazyLoader('Part', globals(), 'Part')
 
 PathLog.setLevel(PathLog.Level.INFO, PathLog.thisModule())
 #PathLog.trackModule()
@@ -202,14 +205,13 @@ class Tag:
         return False
 
     def nextIntersectionClosestTo(self, edge, solid, refPt):
-        # ef = edge.valueAt(edge.FirstParameter)
-        # em = edge.valueAt((edge.FirstParameter+edge.LastParameter)/2)
-        # el = edge.valueAt(edge.LastParameter)
-        # print("-------- intersect %s (%.2f, %.2f, %.2f) - (%.2f, %.2f, %.2f) - (%.2f, %.2f, %.2f)  refp=(%.2f, %.2f, %.2f)" % (type(edge.Curve), ef.x, ef.y, ef.z, em.x, em.y, em.z, el.x, el.y, el.z, refPt.x, refPt.y, refPt.z))
+        # debugEdge(edge, 'intersects_')
 
         vertexes = edge.common(solid).Vertexes
         if vertexes:
-            return sorted(vertexes, key=lambda v: (v.Point - refPt).Length)[0].Point
+            pt = sorted(vertexes, key=lambda v: (v.Point - refPt).Length)[0].Point
+            debugEdge(edge, "intersects (%.2f, %.2f, %.2f) -> (%.2f, %.2f, %.2f)" % (refPt.x, refPt.y, refPt.z, pt.x, pt.y, pt.z))
+            return pt
         return None
 
     def intersects(self, edge, param):
@@ -507,6 +509,7 @@ class MapWireToTag:
         self.tail = None
         self.finalEdge = edge
         if self.tag.solid.isInside(edge.valueAt(edge.LastParameter), PathGeom.Tolerance, True):
+            PathLog.track('solid.isInside')
             self.addEdge(edge)
         else:
             i = self.tag.intersects(edge, edge.LastParameter)
@@ -517,8 +520,10 @@ class MapWireToTag:
                 PathLog.debug('originAt: (%.2f, %.2f, %.2f)' % (o.x, o.y, o.z))
                 i = edge.valueAt(edge.FirstParameter)
             if PathGeom.pointsCoincide(i, edge.valueAt(edge.FirstParameter)):
+                PathLog.track('tail')
                 self.tail = edge
             else:
+                PathLog.track('split')
                 e, tail = PathGeom.splitEdgeAt(edge, i)
                 self.addEdge(e)
                 self.tail = tail
@@ -937,7 +942,7 @@ class ObjectTagDressup:
                 PathLog.debug("previousTag = %d [%s]" % (i, prev))
             else:
                 disabled.append(i)
-            tag.nr = i  # assigne final nr
+            tag.nr = i  # assign final nr
             tags.append(tag)
             positions.append(tag.originAt(self.pathData.minZ))
         return (tags, positions, disabled)

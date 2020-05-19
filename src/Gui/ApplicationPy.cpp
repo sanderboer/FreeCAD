@@ -144,6 +144,12 @@ PyMethodDef Application::Methods[] = {
   {"listCommands",               (PyCFunction) Application::sListCommands, METH_VARARGS,
    "listCommands() -> list of strings\n\n"
    "Returns a list of all commands known to FreeCAD."},
+  {"getCommandInfo",               (PyCFunction) Application::sGetCommandInfo, METH_VARARGS,
+  "getCommandInfo(string) -> list of strings\n\n"
+  "Usage: menuText,tooltipText,whatsThisText,statustipText,pixmapText,shortcutText = getCommandInfo(string)"},
+  {"getCommandShortcut",               (PyCFunction) Application::sGetCommandShortcut, METH_VARARGS,
+   "getCommandShortcut(string) -> string\n\n"
+   "Returns string representing shortcut key accelerator for command."},
   {"updateCommands",        (PyCFunction) Application::sUpdateCommands, METH_VARARGS,
    "updateCommands\n\n"
    "Update all command active status"},
@@ -217,6 +223,13 @@ PyMethodDef Application::Methods[] = {
   {"reload",                    (PyCFunction) Application::sReload, METH_VARARGS,
    "reload(name) -> doc\n\n"
    "Reload a partial opened document"},
+
+  {"loadFile",       (PyCFunction) Application::sLoadFile, METH_VARARGS,
+   "loadFile(string=filename,[string=module]) -> None\n\n"
+   "Loads an arbitrary file by delegating to the given Python module:\n"
+   "* If no module is given it will be determined by the file extension.\n"
+   "* If more than one module can load a file the first one one will be taken.\n"
+   "* If no module exists to load the file an exception will be raised."},
 
   {"coinRemoveAllChildren",     (PyCFunction) Application::sCoinRemoveAllChildren, METH_VARARGS,
    "Remove all children from a group node"},
@@ -1266,6 +1279,73 @@ PyObject* Application::sUpdateCommands(PyObject * /*self*/, PyObject *args)
     Py_Return;
 }
 
+PyObject* Application::sGetCommandShortcut(PyObject * /*self*/, PyObject *args)
+{
+    char* pName;
+    if (!PyArg_ParseTuple(args, "s", &pName))
+        return NULL;
+
+    Command* cmd = Application::Instance->commandManager().getCommandByName(pName);
+    if (cmd) {
+
+#if PY_MAJOR_VERSION >= 3
+        PyObject* str = PyUnicode_FromString(cmd->getAccel() ? cmd->getAccel() : "");
+#else
+        PyObject* str = PyString_FromString(cmd->getAccel() ? cmd->getAccel() : "");
+#endif
+        return str;
+    }
+    else {
+        PyErr_Format(Base::BaseExceptionFreeCADError, "No such command '%s'", pName);
+        return 0;
+    }
+}
+
+PyObject* Application::sGetCommandInfo(PyObject * /*self*/, PyObject *args)
+{
+    char* pName;
+    if (!PyArg_ParseTuple(args, "s", &pName))
+        return NULL;
+
+    Command* cmd = Application::Instance->commandManager().getCommandByName(pName);
+    if (cmd) {
+        PyObject* pyList = PyList_New(6);
+        const char* menuTxt = cmd->getMenuText();
+        const char* tooltipTxt = cmd->getToolTipText();
+        const char* whatsThisTxt = cmd->getWhatsThis();
+        const char* statustipTxt = cmd->getStatusTip();
+        const char* pixMapTxt = cmd->getPixmap();
+        const char* shortcutTxt = cmd->getAccel();
+
+#if PY_MAJOR_VERSION >= 3
+        PyObject* strMenuTxt = PyUnicode_FromString(menuTxt ? menuTxt : "");
+        PyObject* strTooltipTxt = PyUnicode_FromString(tooltipTxt ? tooltipTxt : "");
+        PyObject* strWhatsThisTxt = PyUnicode_FromString(whatsThisTxt ? whatsThisTxt : "");
+        PyObject* strStatustipTxt = PyUnicode_FromString(statustipTxt ? statustipTxt : "");
+        PyObject* strPixMapTxt = PyUnicode_FromString(pixMapTxt ? pixMapTxt : "");
+        PyObject* strShortcutTxt = PyUnicode_FromString(shortcutTxt ? shortcutTxt : "");
+#else
+        PyObject* strMenuTxt = PyString_FromString(menuTxt ? menuTxt : "");
+        PyObject* strTooltipTxt = PyString_FromString(tooltipTxt ? tooltipTxt : "");
+        PyObject* strWhatsThisTxt = PyString_FromString(whatsThisTxt ? whatsThisTxt : "");
+        PyObject* strStatustipTxt = PyString_FromString(statustipTxt ? statustipTxt : "");
+        PyObject* strPixMapTxt = PyString_FromString(pixMapTxt ? pixMapTxt : "");
+        PyObject* strShortcutTxt = PyString_FromString(shortcutTxt ? shortcutTxt : "");
+#endif
+        PyList_SetItem(pyList, 0, strMenuTxt);
+        PyList_SetItem(pyList, 1, strTooltipTxt);
+        PyList_SetItem(pyList, 2, strWhatsThisTxt);
+        PyList_SetItem(pyList, 3, strStatustipTxt);
+        PyList_SetItem(pyList, 4, strPixMapTxt);
+        PyList_SetItem(pyList, 5, strShortcutTxt);
+        return pyList;
+    }
+    else {
+        PyErr_Format(Base::BaseExceptionFreeCADError, "No such command '%s'", pName);
+        return 0;
+    }
+}
+
 PyObject* Application::sListCommands(PyObject * /*self*/, PyObject *args)
 {
     if (!PyArg_ParseTuple(args, ""))
@@ -1468,6 +1548,37 @@ PyObject* Application::sReload(PyObject * /*self*/, PyObject *args)
             return doc->getPyObject();
     }PY_CATCH;
     Py_Return;
+}
+
+PyObject* Application::sLoadFile(PyObject * /*self*/, PyObject *args)
+{
+    char *path, *mod="";
+    if (!PyArg_ParseTuple(args, "s|s", &path, &mod))     // convert args: Python->C
+        return 0;                             // NULL triggers exception
+    PY_TRY {
+        Base::FileInfo fi(path);
+        if (!fi.isFile() || !fi.exists()) {
+            PyErr_Format(PyExc_IOError, "File %s doesn't exist.", path);
+            return 0;
+        }
+
+        std::string module = mod;
+        if (module.empty()) {
+            std::string ext = fi.extension();
+            std::vector<std::string> modules = App::GetApplication().getImportModules(ext.c_str());
+            if (modules.empty()) {
+                PyErr_Format(PyExc_IOError, "Filetype %s is not supported.", ext.c_str());
+                return 0;
+            }
+            else {
+                module = modules.front();
+            }
+        }
+
+        Application::Instance->open(path,module.c_str());
+
+        Py_Return;
+    } PY_CATCH
 }
 
 PyObject* Application::sAddDocObserver(PyObject * /*self*/, PyObject *args)

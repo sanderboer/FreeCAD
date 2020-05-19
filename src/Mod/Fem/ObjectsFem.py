@@ -1,6 +1,8 @@
 # ***************************************************************************
 # *   Copyright (c) 2016 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
+# *   This file is part of the FreeCAD CAx development system.              *
+# *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
 # *   as published by the Free Software Foundation; either version 2 of     *
@@ -245,6 +247,23 @@ def makeConstraintTemperature(
     """makeConstraintTemperature(document, [name]):
     makes a Fem ConstraintTemperature object"""
     obj = doc.addObject("Fem::ConstraintTemperature", name)
+    return obj
+
+
+def makeConstraintTie(
+    doc,
+    name="ConstraintTie"
+):
+    """makeConstraintTie(document, [name]):
+    creates an tie object to define bonded faces constraint"""
+    obj = doc.addObject("Fem::ConstraintPython", name)
+    from femobjects import _FemConstraintTie
+    _FemConstraintTie._FemConstraintTie(obj)
+    if FreeCAD.GuiUp:
+        from femguiobjects import _ViewProviderFemConstraintTie
+        _ViewProviderFemConstraintTie._ViewProviderFemConstraintTie(
+            obj.ViewObject
+        )
     return obj
 
 

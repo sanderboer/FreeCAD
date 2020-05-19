@@ -1,6 +1,5 @@
 # ***************************************************************************
-# *   Copyright (c) 2018 - FreeCAD Developers                               *
-# *   Author: Bernd Hahnebach <bernd@bimstatik.org>                         *
+# *   Copyright (c) 2018 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
 # *   This file is part of the FreeCAD CAx development system.              *
 # *                                                                         *
@@ -20,12 +19,19 @@
 # *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
 # *   USA                                                                   *
 # *                                                                         *
-# ***************************************************************************/
+# ***************************************************************************
 
+__title__ = "Objects FEM unit tests"
+__author__ = "Bernd Hahnebach"
+__url__ = "http://www.freecadweb.org"
+
+import sys
+import unittest
+from os.path import join
 
 import FreeCAD
+
 import ObjectsFem
-import unittest
 from . import support_utils as testtools
 from .support_utils import fcc_print
 
@@ -38,15 +44,8 @@ class TestObjectCreate(unittest.TestCase):
         self
     ):
         # setUp is executed before every test
-        # setting up a document to hold the tests
         self.doc_name = self.__class__.__name__
-        if FreeCAD.ActiveDocument:
-            if FreeCAD.ActiveDocument.Name != self.doc_name:
-                FreeCAD.newDocument(self.doc_name)
-        else:
-            FreeCAD.newDocument(self.doc_name)
-        FreeCAD.setActiveDocument(self.doc_name)
-        self.active_doc = FreeCAD.ActiveDocument
+        self.document = FreeCAD.newDocument(self.doc_name)
 
     def test_00print(
         self
@@ -61,7 +60,7 @@ class TestObjectCreate(unittest.TestCase):
     def test_femobjects_make(
         self
     ):
-        doc = self.active_doc
+        doc = self.document
         analysis = ObjectsFem.makeAnalysis(doc)
 
         analysis.addObject(ObjectsFem.makeConstraintBearing(doc))
@@ -82,6 +81,7 @@ class TestObjectCreate(unittest.TestCase):
         analysis.addObject(ObjectsFem.makeConstraintPulley(doc))
         analysis.addObject(ObjectsFem.makeConstraintSelfWeight(doc))
         analysis.addObject(ObjectsFem.makeConstraintTemperature(doc))
+        analysis.addObject(ObjectsFem.makeConstraintTie(doc))
         analysis.addObject(ObjectsFem.makeConstraintTransform(doc))
 
         analysis.addObject(ObjectsFem.makeElementFluid1D(doc))
@@ -95,47 +95,70 @@ class TestObjectCreate(unittest.TestCase):
         analysis.addObject(ObjectsFem.makeMaterialReinforced(doc))
 
         msh = analysis.addObject(ObjectsFem.makeMeshGmsh(doc))[0]
-        analysis.addObject(ObjectsFem.makeMeshBoundaryLayer(doc, msh))
-        analysis.addObject(ObjectsFem.makeMeshGroup(doc, msh))
-        analysis.addObject(ObjectsFem.makeMeshRegion(doc, msh))
+        ObjectsFem.makeMeshBoundaryLayer(doc, msh)
+        ObjectsFem.makeMeshGroup(doc, msh)
+        ObjectsFem.makeMeshRegion(doc, msh)
         analysis.addObject(ObjectsFem.makeMeshNetgen(doc))
-        analysis.addObject(ObjectsFem.makeMeshResult(doc))
+        rm = ObjectsFem.makeMeshResult(doc)
 
         res = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
+        res.Mesh = rm
         if "BUILD_FEM_VTK" in FreeCAD.__cmake__:
             vres = analysis.addObject(ObjectsFem.makePostVtkResult(doc, res))[0]
-            analysis.addObject(ObjectsFem.makePostVtkFilterClipRegion(doc, vres))
-            analysis.addObject(ObjectsFem.makePostVtkFilterClipScalar(doc, vres))
-            analysis.addObject(ObjectsFem.makePostVtkFilterCutFunction(doc, vres))
-            analysis.addObject(ObjectsFem.makePostVtkFilterWarp(doc, vres))
+            ObjectsFem.makePostVtkFilterClipRegion(doc, vres)
+            ObjectsFem.makePostVtkFilterClipScalar(doc, vres)
+            ObjectsFem.makePostVtkFilterCutFunction(doc, vres)
+            ObjectsFem.makePostVtkFilterWarp(doc, vres)
 
         analysis.addObject(ObjectsFem.makeSolverCalculixCcxTools(doc))
         analysis.addObject(ObjectsFem.makeSolverCalculix(doc))
         sol = analysis.addObject(ObjectsFem.makeSolverElmer(doc))[0]
         analysis.addObject(ObjectsFem.makeSolverZ88(doc))
 
-        analysis.addObject(ObjectsFem.makeEquationElasticity(doc, sol))
-        analysis.addObject(ObjectsFem.makeEquationElectrostatic(doc, sol))
-        analysis.addObject(ObjectsFem.makeEquationFlow(doc, sol))
-        analysis.addObject(ObjectsFem.makeEquationFluxsolver(doc, sol))
-        analysis.addObject(ObjectsFem.makeEquationHeat(doc, sol))
-        # is = 48 (just copy in empty file to test, or run unit test case, it is printed)
-        # TODO if the equations and gmsh mesh childs are added to the analysis,
-        # they show up twice on Tree (on solver resp. gemsh mesh obj and on analysis)
-        # https://forum.freecadweb.org/viewtopic.php?t=25283
+        ObjectsFem.makeEquationElasticity(doc, sol)
+        ObjectsFem.makeEquationElectrostatic(doc, sol)
+        ObjectsFem.makeEquationFlow(doc, sol)
+        ObjectsFem.makeEquationFluxsolver(doc, sol)
+        ObjectsFem.makeEquationHeat(doc, sol)
 
         doc.recompute()
 
+        # count the def make in ObjectsFem module
         # if FEM VTK post processing is disabled, we are not able to create VTK post objects
         if "BUILD_FEM_VTK" in FreeCAD.__cmake__:
-            fem_vtk_post = True
+            count_defmake = testtools.get_defmake_count()
         else:
-            fem_vtk_post = False
-        # because of the analysis itself count -1
-        self.assertEqual(
-            len(analysis.Group),
-            testtools.get_defmake_count(fem_vtk_post) - 1
+            count_defmake = testtools.get_defmake_count(False)
+        # TODO if the children are added to the analysis, they show up twice on Tree
+        # thus they are not added to the analysis group ATM
+        # https://forum.freecadweb.org/viewtopic.php?t=25283
+        # thus they should not be counted
+        # solver children: equations --> 5
+        # gmsh mesh children: group, region, boundary layer --> 3
+        # resule children: mesh result --> 1
+        # post pipeline childeren: region, scalar, cut, wrap --> 4
+        # analysis itself is not in analysis group --> 1
+        # thus: -14
+
+        self.assertEqual(len(analysis.Group), count_defmake - 14)
+        self.assertEqual(len(doc.Objects), count_defmake)
+
+        fcc_print("doc objects count: {}, method: {}".format(
+            len(doc.Objects),
+            sys._getframe().f_code.co_name)
         )
+
+        # save the file
+        save_dir = testtools.get_unit_test_tmp_dir(
+            testtools.get_fem_test_tmp_dir(),
+            "FEM_all_objects"
+        )
+        save_fc_file = join(save_dir, "all_objects.FCStd")
+        fcc_print(
+            "Save FreeCAD all objects file to {} ..."
+            .format(save_fc_file)
+        )
+        self.document.saveAs(save_fc_file)
 
     # ********************************************************************************************
     def tearDown(
@@ -154,21 +177,23 @@ class TestObjectType(unittest.TestCase):
         self
     ):
         # setUp is executed before every test
-        # setting up a document to hold the tests
         self.doc_name = self.__class__.__name__
-        if FreeCAD.ActiveDocument:
-            if FreeCAD.ActiveDocument.Name != self.doc_name:
-                FreeCAD.newDocument(self.doc_name)
-        else:
-            FreeCAD.newDocument(self.doc_name)
-        FreeCAD.setActiveDocument(self.doc_name)
-        self.active_doc = FreeCAD.ActiveDocument
+        self.document = FreeCAD.newDocument(self.doc_name)
+
+    def test_00print(
+        self
+    ):
+        fcc_print("\n{0}\n{1} run FEM TestObjectType tests {2}\n{0}".format(
+            100 * "*",
+            10 * "*",
+            60 * "*"
+        ))
 
     # ********************************************************************************************
     def test_femobjects_type(
         self
     ):
-        doc = self.active_doc
+        doc = self.document
 
         from femtools.femutils import type_of_obj
         self.assertEqual(
@@ -248,23 +273,27 @@ class TestObjectType(unittest.TestCase):
             type_of_obj(ObjectsFem.makeConstraintTemperature(doc))
         )
         self.assertEqual(
+            "Fem::ConstraintTie",
+            type_of_obj(ObjectsFem.makeConstraintTie(doc))
+        )
+        self.assertEqual(
             "Fem::ConstraintTransform",
             type_of_obj(ObjectsFem.makeConstraintTransform(doc))
         )
         self.assertEqual(
-            "Fem::FemElementFluid1D",
+            "Fem::ElementFluid1D",
             type_of_obj(ObjectsFem.makeElementFluid1D(doc))
         )
         self.assertEqual(
-            "Fem::FemElementGeometry1D",
+            "Fem::ElementGeometry1D",
             type_of_obj(ObjectsFem.makeElementGeometry1D(doc))
         )
         self.assertEqual(
-            "Fem::FemElementGeometry2D",
+            "Fem::ElementGeometry2D",
             type_of_obj(ObjectsFem.makeElementGeometry2D(doc))
         )
         self.assertEqual(
-            "Fem::FemElementRotation1D",
+            "Fem::ElementRotation1D",
             type_of_obj(ObjectsFem.makeElementRotation1D(doc))
         )
         materialsolid = ObjectsFem.makeMaterialSolid(doc)
@@ -288,15 +317,15 @@ class TestObjectType(unittest.TestCase):
             "Fem::FemMeshGmsh",
             type_of_obj(mesh))
         self.assertEqual(
-            "Fem::FemMeshBoundaryLayer",
+            "Fem::MeshBoundaryLayer",
             type_of_obj(ObjectsFem.makeMeshBoundaryLayer(doc, mesh))
         )
         self.assertEqual(
-            "Fem::FemMeshGroup",
+            "Fem::MeshGroup",
             type_of_obj(ObjectsFem.makeMeshGroup(doc, mesh))
         )
         self.assertEqual(
-            "Fem::FemMeshRegion",
+            "Fem::MeshRegion",
             type_of_obj(ObjectsFem.makeMeshRegion(doc, mesh))
         )
         self.assertEqual(
@@ -304,11 +333,11 @@ class TestObjectType(unittest.TestCase):
             type_of_obj(ObjectsFem.makeMeshNetgen(doc))
         )
         self.assertEqual(
-            "Fem::FemMeshResult",
+            "Fem::MeshResult",
             type_of_obj(ObjectsFem.makeMeshResult(doc))
         )
         self.assertEqual(
-            "Fem::FemResultMechanical",
+            "Fem::ResultMechanical",
             type_of_obj(ObjectsFem.makeResultMechanical(doc))
         )
         solverelmer = ObjectsFem.makeSolverElmer(doc)
@@ -329,34 +358,39 @@ class TestObjectType(unittest.TestCase):
             type_of_obj(ObjectsFem.makeSolverZ88(doc))
         )
         self.assertEqual(
-            "Fem::FemEquationElmerElasticity",
+            "Fem::EquationElmerElasticity",
             type_of_obj(ObjectsFem.makeEquationElasticity(doc, solverelmer))
         )
         self.assertEqual(
-            "Fem::FemEquationElmerElectrostatic",
+            "Fem::EquationElmerElectrostatic",
             type_of_obj(ObjectsFem.makeEquationElectrostatic(doc, solverelmer))
         )
         self.assertEqual(
-            "Fem::FemEquationElmerFlow",
+            "Fem::EquationElmerFlow",
             type_of_obj(ObjectsFem.makeEquationFlow(doc, solverelmer))
         )
         self.assertEqual(
-            "Fem::FemEquationElmerFluxsolver",
+            "Fem::EquationElmerFluxsolver",
             type_of_obj(ObjectsFem.makeEquationFluxsolver(doc, solverelmer))
         )
         self.assertEqual(
-            "Fem::FemEquationElmerHeat",
+            "Fem::EquationElmerHeat",
             type_of_obj(ObjectsFem.makeEquationHeat(doc, solverelmer))
         )
-        # is = 44 tests (just copy in empty file to test)
-        # TODO: vtk post objs
-        # TODO: use different type for fluid and solid material
+
+        fcc_print("doc objects count: {}, method: {}".format(
+            len(doc.Objects),
+            sys._getframe().f_code.co_name)
+        )
+        # TODO: vtk post objs, thus 5 obj less than test_femobjects_make
+        self.assertEqual(len(doc.Objects), testtools.get_defmake_count(False))
+        # TODO: use different type for material fluid and material solid
 
     # ********************************************************************************************
     def test_femobjects_isoftype(
         self
     ):
-        doc = self.active_doc
+        doc = self.document
 
         from femtools.femutils import is_of_type
         self.assertTrue(is_of_type(
@@ -436,24 +470,28 @@ class TestObjectType(unittest.TestCase):
             "Fem::ConstraintTemperature"
         ))
         self.assertTrue(is_of_type(
+            ObjectsFem.makeConstraintTie(doc),
+            "Fem::ConstraintTie"
+        ))
+        self.assertTrue(is_of_type(
             ObjectsFem.makeConstraintTransform(doc),
             "Fem::ConstraintTransform"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeElementFluid1D(doc),
-            "Fem::FemElementFluid1D"
+            "Fem::ElementFluid1D"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeElementGeometry1D(doc),
-            "Fem::FemElementGeometry1D"
+            "Fem::ElementGeometry1D"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeElementGeometry2D(doc),
-            "Fem::FemElementGeometry2D"
+            "Fem::ElementGeometry2D"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeElementRotation1D(doc),
-            "Fem::FemElementRotation1D"
+            "Fem::ElementRotation1D"
         ))
         materialsolid = ObjectsFem.makeMaterialSolid(doc)
         self.assertTrue(is_of_type(
@@ -479,15 +517,15 @@ class TestObjectType(unittest.TestCase):
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeMeshBoundaryLayer(doc, mesh),
-            "Fem::FemMeshBoundaryLayer"
+            "Fem::MeshBoundaryLayer"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeMeshGroup(doc, mesh),
-            "Fem::FemMeshGroup"
+            "Fem::MeshGroup"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeMeshRegion(doc, mesh),
-            "Fem::FemMeshRegion"
+            "Fem::MeshRegion"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeMeshNetgen(doc),
@@ -495,11 +533,11 @@ class TestObjectType(unittest.TestCase):
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeMeshResult(doc),
-            "Fem::FemMeshResult"
+            "Fem::MeshResult"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeResultMechanical(doc),
-            "Fem::FemResultMechanical"
+            "Fem::ResultMechanical"
         ))
         solverelmer = ObjectsFem.makeSolverElmer(doc)
         self.assertTrue(is_of_type(
@@ -520,25 +558,31 @@ class TestObjectType(unittest.TestCase):
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeEquationElasticity(doc, solverelmer),
-            "Fem::FemEquationElmerElasticity"
+            "Fem::EquationElmerElasticity"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeEquationElectrostatic(doc, solverelmer),
-            "Fem::FemEquationElmerElectrostatic"
+            "Fem::EquationElmerElectrostatic"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeEquationFlow(doc, solverelmer),
-            "Fem::FemEquationElmerFlow"
+            "Fem::EquationElmerFlow"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeEquationFluxsolver(doc, solverelmer),
-            "Fem::FemEquationElmerFluxsolver"
+            "Fem::EquationElmerFluxsolver"
         ))
         self.assertTrue(is_of_type(
             ObjectsFem.makeEquationHeat(doc, solverelmer),
-            "Fem::FemEquationElmerHeat"
+            "Fem::EquationElmerHeat"
         ))
-        # is = 44 tests (just copy in empty file to test)
+
+        fcc_print("doc objects count: {}, method: {}".format(
+            len(doc.Objects),
+            sys._getframe().f_code.co_name)
+        )
+        # TODO: vtk post objs, thus 5 obj less than test_femobjects_make
+        self.assertEqual(len(doc.Objects), testtools.get_defmake_count(False))
 
     # ********************************************************************************************
     def test_femobjects_derivedfromfem(
@@ -546,634 +590,707 @@ class TestObjectType(unittest.TestCase):
     ):
         # try to add all possible True types from inheritance chain see
         # https://forum.freecadweb.org/viewtopic.php?f=10&t=32625
-        doc = self.active_doc
+        doc = self.document
 
         from femtools.femutils import is_derived_from
 
-        materialsolid = ObjectsFem.makeMaterialSolid(doc)
-        mesh = ObjectsFem.makeMeshGmsh(doc)
-        solverelmer = ObjectsFem.makeSolverElmer(doc)
-
         # FemAnalysis
+        analysis = ObjectsFem.makeAnalysis(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeAnalysis(doc),
+            analysis,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeAnalysis(doc),
+            analysis,
             "Fem::FemAnalysis"
         ))
 
         # ConstraintBearing
+        constraint_bearing = ObjectsFem.makeConstraintBearing(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintBearing(doc),
+            constraint_bearing,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintBearing(doc),
+            constraint_bearing,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintBearing(doc),
+            constraint_bearing,
             "Fem::ConstraintBearing"
         ))
 
         # ConstraintBodyHeatSource
+        constraint_body_heat_source = ObjectsFem.makeConstraintBodyHeatSource(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintBodyHeatSource(doc),
+            constraint_body_heat_source,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintBodyHeatSource(doc),
+            constraint_body_heat_source,
             "Fem::ConstraintPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintBodyHeatSource(doc),
+            constraint_body_heat_source,
             "Fem::ConstraintBodyHeatSource"
         ))
 
         # ConstraintContact
+        constraint_contact = ObjectsFem.makeConstraintContact(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintContact(doc),
+            constraint_contact,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintContact(doc),
+            constraint_contact,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintContact(doc),
+            constraint_contact,
             "Fem::ConstraintContact"
         ))
 
         # ConstraintDisplacement
+        constraint_dicplacement = ObjectsFem.makeConstraintDisplacement(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintDisplacement(doc),
+            constraint_dicplacement,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintDisplacement(doc),
+            constraint_dicplacement,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintDisplacement(doc),
+            constraint_dicplacement,
             "Fem::ConstraintDisplacement"
         ))
 
         # ConstraintElectrostaticPotential
+        constraint_electorstatic_potential = ObjectsFem.makeConstraintElectrostaticPotential(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintElectrostaticPotential(doc),
+            constraint_electorstatic_potential,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintElectrostaticPotential(doc),
+            constraint_electorstatic_potential,
             "Fem::ConstraintPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintElectrostaticPotential(doc),
+            constraint_electorstatic_potential,
             "Fem::ConstraintElectrostaticPotential"
         ))
 
         # ConstraintFixed
+        constraint_fixed = ObjectsFem.makeConstraintFixed(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFixed(doc),
+            constraint_fixed,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFixed(doc),
+            constraint_fixed,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFixed(doc),
+            constraint_fixed,
             "Fem::ConstraintFixed"
         ))
 
         # ConstraintFlowVelocity
+        constraint_flow_velocity = ObjectsFem.makeConstraintFlowVelocity(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFlowVelocity(doc),
+            constraint_flow_velocity,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFlowVelocity(doc),
+            constraint_flow_velocity,
             "Fem::ConstraintPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFlowVelocity(doc),
+            constraint_flow_velocity,
             "Fem::ConstraintFlowVelocity"
         ))
 
         # ConstraintFluidBoundary
+        constraint_fluid_boundary = ObjectsFem.makeConstraintFluidBoundary(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFluidBoundary(doc),
+            constraint_fluid_boundary,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFluidBoundary(doc),
+            constraint_fluid_boundary,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintFluidBoundary(doc),
+            constraint_fluid_boundary,
             "Fem::ConstraintFluidBoundary"
         ))
 
         # ConstraintForce
+        constraint_force = ObjectsFem.makeConstraintForce(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintForce(doc),
+            constraint_force,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintForce(doc),
+            constraint_force,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintForce(doc),
+            constraint_force,
             "Fem::ConstraintForce"
         ))
 
         # ConstraintGear
+        constraint_gear = ObjectsFem.makeConstraintGear(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintGear(doc),
+            constraint_gear,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintGear(doc),
+            constraint_gear,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintGear(doc),
+            constraint_gear,
             "Fem::ConstraintGear"
         ))
 
         # ConstraintHeatflux
+        constraint_heat_flux = ObjectsFem.makeConstraintHeatflux(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintHeatflux(doc),
+            constraint_heat_flux,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintHeatflux(doc),
+            constraint_heat_flux,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintHeatflux(doc),
+            constraint_heat_flux,
             "Fem::ConstraintHeatflux"
         ))
 
         # ConstraintInitialFlowVelocity
+        constraint_initial_flow_velocity = ObjectsFem.makeConstraintInitialFlowVelocity(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintInitialFlowVelocity(doc),
+            constraint_initial_flow_velocity,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintInitialFlowVelocity(doc),
+            constraint_initial_flow_velocity,
             "Fem::ConstraintPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintInitialFlowVelocity(doc),
+            constraint_initial_flow_velocity,
             "Fem::ConstraintInitialFlowVelocity"
         ))
 
         # ConstraintInitialTemperature
+        constraint_initial_temperature = ObjectsFem.makeConstraintInitialTemperature(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintInitialTemperature(doc),
+            constraint_initial_temperature,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintInitialTemperature(doc),
+            constraint_initial_temperature,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintInitialTemperature(doc),
+            constraint_initial_temperature,
             "Fem::ConstraintInitialTemperature"
         ))
 
         # ConstraintPlaneRotation
+        constraint_plane_rotation = ObjectsFem.makeConstraintPlaneRotation(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPlaneRotation(doc),
+            constraint_plane_rotation,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPlaneRotation(doc),
+            constraint_plane_rotation,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPlaneRotation(doc),
+            constraint_plane_rotation,
             "Fem::ConstraintPlaneRotation"
         ))
 
         # ConstraintPressure
+        constraint_pressure = ObjectsFem.makeConstraintPressure(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPressure(doc),
+            constraint_pressure,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPressure(doc),
+            constraint_pressure,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPressure(doc),
+            constraint_pressure,
             "Fem::ConstraintPressure"
         ))
 
         # ConstraintPulley
+        constraint_pulley = ObjectsFem.makeConstraintPulley(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPulley(doc),
+            constraint_pulley,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPulley(doc),
+            constraint_pulley,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintPulley(doc),
+            constraint_pulley,
             "Fem::ConstraintPulley"
         ))
 
         # ConstraintSelfWeight
+        constraint_self_weight = ObjectsFem.makeConstraintSelfWeight(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintSelfWeight(doc),
+            constraint_self_weight,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintSelfWeight(doc),
+            constraint_self_weight,
             "Fem::ConstraintPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintSelfWeight(doc),
+            constraint_self_weight,
             "Fem::ConstraintSelfWeight"
         ))
 
         # ConstraintTemperature
+        constraint_temperature = ObjectsFem.makeConstraintTemperature(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintTemperature(doc),
+            constraint_temperature,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintTemperature(doc),
+            constraint_temperature,
             "Fem::Constraint"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintTemperature(doc),
+            constraint_temperature,
             "Fem::ConstraintTemperature"
         ))
 
-        # ConstraintTransform
+        # ConstraintTie
+        constraint_tie = ObjectsFem.makeConstraintTie(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintTransform(doc),
+            constraint_tie,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeConstraintTransform(doc),
+            constraint_tie,
+            "Fem::Constraint"
+        ))
+        self.assertTrue(is_derived_from(
+            constraint_tie,
+            "Fem::ConstraintPython"
+        ))
+        self.assertTrue(is_derived_from(
+            constraint_tie,
+            "Fem::ConstraintTie"
+        ))
+
+        # ConstraintTransform
+        constraint_transform = ObjectsFem.makeConstraintTransform(doc)
+        self.assertTrue(is_derived_from(
+            constraint_transform,
+            "App::DocumentObject"
+        ))
+        self.assertTrue(is_derived_from(
+            constraint_transform,
             "Fem::ConstraintTransform"
         ))
 
         # FemElementFluid1D
+        fluid1d = ObjectsFem.makeElementFluid1D(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementFluid1D(doc),
+            fluid1d,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementFluid1D(doc),
+            fluid1d,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementFluid1D(doc),
-            "Fem::FemElementFluid1D"
+            fluid1d,
+            "Fem::ElementFluid1D"
         ))
 
         # FemElementGeometry1D
+        geometry1d = ObjectsFem.makeElementGeometry1D(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementGeometry1D(doc),
+            geometry1d,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementGeometry1D(doc),
+            geometry1d,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementGeometry1D(doc),
-            "Fem::FemElementGeometry1D"
+            geometry1d,
+            "Fem::ElementGeometry1D"
         ))
 
         # FemElementGeometry2D
+        geometry2d = ObjectsFem.makeElementGeometry2D(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementGeometry2D(doc),
+            geometry2d,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementGeometry2D(doc),
+            geometry2d,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementGeometry2D(doc),
-            "Fem::FemElementGeometry2D"
+            geometry2d,
+            "Fem::ElementGeometry2D"
         ))
 
         # FemElementRotation1D
+        rotation1d = ObjectsFem.makeElementRotation1D(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementRotation1D(doc),
+            rotation1d,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementRotation1D(doc),
+            rotation1d,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeElementRotation1D(doc),
-            "Fem::FemElementRotation1D"
+            rotation1d,
+            "Fem::ElementRotation1D"
         ))
 
-        # Material
+        # Material Fluid
+        material_fluid = ObjectsFem.makeMaterialFluid(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialFluid(doc),
+            material_fluid,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialFluid(doc),
+            material_fluid,
             "App::MaterialObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialFluid(doc),
+            material_fluid,
             "Fem::Material"
         ))
 
-        # Material
+        # Material Solid
+        material_solid = ObjectsFem.makeMaterialSolid(doc)
         self.assertTrue(is_derived_from(
-            materialsolid, "App::DocumentObject"
-        ))
-        self.assertTrue(is_derived_from(
-            materialsolid, "App::MaterialObjectPython"
-        ))
-        self.assertTrue(is_derived_from(
-            materialsolid, "Fem::Material"
-        ))
-
-        # MaterialMechanicalNonlinear
-        self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialMechanicalNonlinear(doc, materialsolid),
+            material_solid,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialMechanicalNonlinear(doc, materialsolid),
+            material_solid,
+            "App::MaterialObjectPython"
+        ))
+        self.assertTrue(is_derived_from(
+            material_solid,
+            "Fem::Material"
+        ))
+
+        # MaterialMechanicalNonlinear
+        material_nonlinear = ObjectsFem.makeMaterialMechanicalNonlinear(doc, material_solid)
+        self.assertTrue(is_derived_from(
+            material_nonlinear,
+            "App::DocumentObject"
+        ))
+        self.assertTrue(is_derived_from(
+            material_nonlinear,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialMechanicalNonlinear(doc, materialsolid),
+            material_nonlinear,
             "Fem::MaterialMechanicalNonlinear"
         ))
 
         # MaterialReinforced
+        material_reinforced = ObjectsFem.makeMaterialReinforced(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialReinforced(doc),
+            material_reinforced,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialReinforced(doc),
+            material_reinforced,
             "App::MaterialObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMaterialReinforced(doc),
+            material_reinforced,
             "Fem::MaterialReinforced"
         ))
 
         # FemMeshGmsh
+        mesh_gmsh = ObjectsFem.makeMeshGmsh(doc)
         self.assertTrue(is_derived_from(
-            mesh, "App::DocumentObject"
+            mesh_gmsh,
+            "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            mesh, "Fem::FemMeshObjectPython"
+            mesh_gmsh,
+            "Fem::FemMeshObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            mesh, "Fem::FemMeshGmsh"
+            mesh_gmsh,
+            "Fem::FemMeshGmsh"
         ))
 
         # FemMeshBoundaryLayer
+        mesh_boundarylayer = ObjectsFem.makeMeshBoundaryLayer(doc, mesh_gmsh)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshBoundaryLayer(doc, mesh),
+            mesh_boundarylayer,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshBoundaryLayer(doc, mesh),
+            mesh_boundarylayer,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshBoundaryLayer(doc, mesh),
-            "Fem::FemMeshBoundaryLayer"
+            mesh_boundarylayer,
+            "Fem::MeshBoundaryLayer"
         ))
 
         # FemMeshGroup
+        mesh_group = ObjectsFem.makeMeshGroup(doc, mesh_gmsh)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshGroup(doc, mesh),
+            mesh_group,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshGroup(doc, mesh),
+            mesh_group,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshGroup(doc, mesh),
-            "Fem::FemMeshGroup"
+            mesh_group,
+            "Fem::MeshGroup"
         ))
 
         # FemMeshRegion
+        mesh_region = ObjectsFem.makeMeshRegion(doc, mesh_gmsh)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshRegion(doc, mesh),
+            mesh_region,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshRegion(doc, mesh),
+            mesh_region,
             "Fem::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshRegion(doc, mesh),
-            "Fem::FemMeshRegion"
+            mesh_region,
+            "Fem::MeshRegion"
         ))
 
         # FemMeshShapeNetgenObject
+        mesh_netgen = ObjectsFem.makeMeshNetgen(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshNetgen(doc),
+            mesh_netgen,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshNetgen(doc),
+            mesh_netgen,
             "Fem::FemMeshShapeNetgenObject"
         ))
 
         # FemMeshResult
+        mesh_result = ObjectsFem.makeMeshResult(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshResult(doc),
+            mesh_result,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshResult(doc),
+            mesh_result,
             "Fem::FemMeshObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeMeshResult(doc),
-            "Fem::FemMeshResult"
+            mesh_result,
+            "Fem::MeshResult"
         ))
 
         # FemResultMechanical
+        result_mechanical = ObjectsFem.makeResultMechanical(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeResultMechanical(doc),
+            result_mechanical,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeResultMechanical(doc),
+            result_mechanical,
             "Fem::FemResultObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeResultMechanical(doc),
-            "Fem::FemResultMechanical"
+            result_mechanical,
+            "Fem::ResultMechanical"
         ))
 
         # FemSolverCalculixCcxTools
+        solver_ccxtools = ObjectsFem.makeSolverCalculixCcxTools(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculixCcxTools(doc),
+            solver_ccxtools,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculixCcxTools(doc),
+            solver_ccxtools,
             "Fem::FemSolverObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculixCcxTools(doc),
+            solver_ccxtools,
             "Fem::FemSolverObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculixCcxTools(doc),
+            solver_ccxtools,
             "Fem::FemSolverCalculixCcxTools"
         ))
 
         # FemSolverObjectCalculix
+        solver_calculix = ObjectsFem.makeSolverCalculix(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculix(doc),
+            solver_calculix,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculix(doc),
+            solver_calculix,
             "Fem::FemSolverObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculix(doc),
+            solver_calculix,
             "Fem::FemSolverObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverCalculix(doc),
+            solver_calculix,
             "Fem::FemSolverObjectCalculix"
         ))
 
         # FemSolverObjectElmer
+        solver_elmer = ObjectsFem.makeSolverElmer(doc)
         self.assertTrue(is_derived_from(
-            solverelmer,
+            solver_elmer,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            solverelmer,
+            solver_elmer,
             "Fem::FemSolverObject"
         ))
         self.assertTrue(is_derived_from(
-            solverelmer,
+            solver_elmer,
             "Fem::FemSolverObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            solverelmer,
+            solver_elmer,
             "Fem::FemSolverObjectElmer"
         ))
 
         # FemSolverObjectZ88
+        solver_z88 = ObjectsFem.makeSolverZ88(doc)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverZ88(doc),
+            solver_z88,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverZ88(doc),
+            solver_z88,
             "Fem::FemSolverObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverZ88(doc),
+            solver_z88,
             "Fem::FemSolverObjectPython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeSolverZ88(doc),
+            solver_z88,
             "Fem::FemSolverObjectZ88"
         ))
 
         # FemEquationElmerElasticity
+        equation_elasticity = ObjectsFem.makeEquationElasticity(doc, solver_elmer)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationElasticity(doc, solverelmer),
+            equation_elasticity,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationElasticity(doc, solverelmer),
+            equation_elasticity,
             "App::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationElasticity(doc, solverelmer),
-            "Fem::FemEquationElmerElasticity"
+            equation_elasticity,
+            "Fem::EquationElmerElasticity"
         ))
 
         # FemEquationElmerElectrostatic
+        equation_electrostatic = ObjectsFem.makeEquationElectrostatic(doc, solver_elmer)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationElectrostatic(doc, solverelmer),
+            equation_electrostatic,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationElectrostatic(doc, solverelmer),
+            equation_electrostatic,
             "App::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationElectrostatic(doc, solverelmer),
-            "Fem::FemEquationElmerElectrostatic"
+            equation_electrostatic,
+            "Fem::EquationElmerElectrostatic"
         ))
 
         # FemEquationElmerFlow
+        equation_flow = ObjectsFem.makeEquationFlow(doc, solver_elmer)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationFlow(doc, solverelmer),
+            equation_flow,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationFlow(doc, solverelmer),
+            equation_flow,
             "App::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationFlow(doc, solverelmer),
-            "Fem::FemEquationElmerFlow"
+            equation_flow,
+            "Fem::EquationElmerFlow"
         ))
 
         # FemEquationElmerFluxsolver
+        equation_flux = ObjectsFem.makeEquationFluxsolver(doc, solver_elmer)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationFluxsolver(doc, solverelmer),
+            equation_flux,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationFluxsolver(doc, solverelmer),
+            equation_flux,
             "App::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationFluxsolver(doc, solverelmer),
-            "Fem::FemEquationElmerFluxsolver"
+            equation_flux,
+            "Fem::EquationElmerFluxsolver"
         ))
 
         # FemEquationElmerHeat
+        equation_heat = ObjectsFem.makeEquationHeat(doc, solver_elmer)
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationHeat(doc, solverelmer),
+            equation_heat,
             "App::DocumentObject"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationHeat(doc, solverelmer),
+            equation_heat,
             "App::FeaturePython"
         ))
         self.assertTrue(is_derived_from(
-            ObjectsFem.makeEquationHeat(doc, solverelmer),
-            "Fem::FemEquationElmerHeat"
+            equation_heat,
+            "Fem::EquationElmerHeat"
         ))
+
+        fcc_print("doc objects count: {}, method: {}".format(
+            len(doc.Objects),
+            sys._getframe().f_code.co_name)
+        )
+        # TODO: vtk post objs, thus 5 obj less than test_femobjects_make
+        self.assertEqual(len(doc.Objects), testtools.get_defmake_count(False))
+        # TODO constraint transform is not derived from "Fem::Constraint" ?!?
 
     # ********************************************************************************************
     def test_femobjects_derivedfromstd(
         self
     ):
         # only the last True type is used
-        doc = self.active_doc
+        doc = self.document
 
         self.assertTrue(
             ObjectsFem.makeAnalysis(
@@ -1266,6 +1383,11 @@ class TestObjectType(unittest.TestCase):
             ObjectsFem.makeConstraintTemperature(
                 doc
             ).isDerivedFrom("Fem::ConstraintTemperature")
+        )
+        self.assertTrue(
+            ObjectsFem.makeConstraintTie(
+                doc
+            ).isDerivedFrom("Fem::ConstraintPython")
         )
         self.assertTrue(
             ObjectsFem.makeConstraintTransform(
@@ -1397,7 +1519,13 @@ class TestObjectType(unittest.TestCase):
                 solverelmer
             ).isDerivedFrom("App::FeaturePython")
         )
-        # is = 44 tests (just copy in empty file to test)
+
+        fcc_print("doc objects count: {}, method: {}".format(
+            len(doc.Objects),
+            sys._getframe().f_code.co_name)
+        )
+        # TODO: vtk post objs, thus 5 obj less than test_femobjects_make
+        self.assertEqual(len(doc.Objects), testtools.get_defmake_count(False))
 
     # ********************************************************************************************
     def tearDown(

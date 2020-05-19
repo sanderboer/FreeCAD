@@ -1,6 +1,8 @@
 # ***************************************************************************
 # *   Copyright (c) 2015 Bernd Hahnebach <bernd@bimstatik.org>              *
 # *                                                                         *
+# *   This file is part of the FreeCAD CAx development system.              *
+# *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
 # *   as published by the Free Software Foundation; either version 2 of     *
@@ -27,33 +29,46 @@ __url__ = "http://www.freecadweb.org"
 #  \ingroup FEM
 #  \brief FreeCAD FEM constraint self weight object
 
+from . import FemConstraint
 
-class _FemConstraintSelfWeight:
-    "The FemConstraintSelfWeight object"
+
+class _FemConstraintSelfWeight(FemConstraint.Proxy):
+    """
+    The FemConstraintSelfWeight object"
+    """
+
+    Type = "Fem::ConstraintSelfWeight"
+
     def __init__(self, obj):
+        super(_FemConstraintSelfWeight, self).__init__(obj)
+
         obj.addProperty(
             "App::PropertyFloat",
             "Gravity_x",
             "Gravity",
-            "set the gravity component in the x direction"
+            "Gravity direction: set the x-component of the normalized gravity vector"
         )
+
         obj.addProperty(
             "App::PropertyFloat",
             "Gravity_y",
             "Gravity",
-            "set the gravity component in the y direction"
+            "Gravity direction: set the y-component of the normalized gravity vector"
         )
+
         obj.addProperty(
             "App::PropertyFloat",
             "Gravity_z",
             "Gravity",
-            "set the gravity component in the z direction"
+            "Gravity direction: set the z-component of the normalized gravity vector"
         )
+
         obj.Gravity_x = 0.0
         obj.Gravity_y = 0.0
         obj.Gravity_z = -1.0
-        obj.Proxy = self
-        self.Type = "Fem::ConstraintSelfWeight"
 
-    def execute(self, obj):
-        return
+        # https://wiki.freecadweb.org/Scripted_objects#Property_Type
+        # https://forum.freecadweb.org/viewtopic.php?f=18&t=13460&start=20#p109709
+        # https://forum.freecadweb.org/viewtopic.php?t=25524
+        # obj.setEditorMode("References", 1)  # read only in PropertyEditor, but writeable by Python
+        obj.setEditorMode("References", 2)  # do not show in Editor
